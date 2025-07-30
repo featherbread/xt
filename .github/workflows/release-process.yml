@@ -158,9 +158,9 @@ jobs:
           mechanism.
 
 
-          [changelog]: https://github.com/ahamlinman/xt/blob/main/CHANGELOG.md
+          [changelog]: https://github.com/featherbread/xt/blob/main/CHANGELOG.md
 
-          [install]: https://github.com/ahamlinman/xt?tab=readme-ov-file#installation
+          [install]: https://github.com/featherbread/xt?tab=readme-ov-file#installation
 
   publish-crate:
     if: ${{ github.ref == 'refs/heads/start-release' }}
