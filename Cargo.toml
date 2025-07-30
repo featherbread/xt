@@ -2,7 +2,7 @@
 name = "xt"
 version = "0.19.5-dev"
 description = "Translate between serialized data formats"
-repository = "https://github.com/ahamlinman/xt"
+repository = "https://github.com/featherbread/xt"
 authors = ["Alex Hamlin <alex@alexhamlin.co>"]
 license = "MIT"
 edition = "2021"

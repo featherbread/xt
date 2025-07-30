@@ -1,5 +1,5 @@
-This is a binary release of https://github.com/ahamlinman/xt, a cross-format
-translator for serialized data formats, including the following contents:
+This is a binary release of https://github.com/featherbread/xt,
+a cross-format translator for serialized data, with the following contents:
 
   - xt is the executable itself. Try "./xt --help" for a usage summary.
 

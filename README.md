@@ -54,7 +54,7 @@ pkgin install xt-rs
 
 On Linux and macOS, the pre-compiled binaries in this repo's GitHub releases can be installed with [Homebrew][homebrew]:
 ```sh
-brew install ahamlinman/tap/xt
+brew install featherbread/tap/xt
 ```
 
 [homebrew]: https://brew.sh/
