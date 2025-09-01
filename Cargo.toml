@@ -33,7 +33,7 @@ hex-literal = "0.4.1"
 similar-asserts = "1.6.1"
 
 [dev-dependencies.criterion]
-version = "0.5.1"
+version = "0.7.0"
 features = ["html_reports"]
 
 [dev-dependencies.rstest]
