@@ -1,3 +1,14 @@
+## Unreleased
+
+### Changed
+
+- **Rust 1.85 or higher is required to build xt.** This change enables continued
+  updates of third-party dependencies as they adopt newer Rust features and
+  migrate to the 2024 Edition. (While xt has no specific MSRV policy at this
+  time, the version and timing of this bump align with the recent release of
+  Debian trixie, and are consistent with MSRV bumps in some of xt's direct
+  dependencies as well as Rust support in downstream package ecosystems.)
+
 ## v0.19.5 (2025-08-31)
 
 ### Changed
@@ -14,9 +25,8 @@
 Beginning with this release, GitHub Actions publishes xt to crates.io via
 [Trusted Publishing](https://crates.io/docs/trusted-publishing) to limit my
 personal use of long-lived API tokens. I make no long-term commitment to the
-continued use of Trusted Publishing, whose implementation as of writing requires
-that xt be hosted and built using proprietary services and infrastructure owned
-and operated by Microsoft Corporation.
+continued use of Trusted Publishing, whose implementation as of writing relies
+on proprietary services owned and operated by Microsoft Corporation.
 
 ## v0.19.4 (2025-02-23)
 
