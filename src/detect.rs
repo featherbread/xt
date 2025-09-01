@@ -2,7 +2,7 @@
 
 use std::io;
 
-use crate::{input, Format};
+use crate::{Format, input};
 
 /// Detects the input format by trying each known format and selecting the first
 /// one that works.

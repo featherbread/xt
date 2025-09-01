@@ -6,7 +6,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 
 use rmp::Marker;
 use rmp_serde::decode::Error::{InvalidDataRead, InvalidMarkerRead};
-use serde::{de, ser, Deserialize};
+use serde::{Deserialize, de, ser};
 
 use crate::input::{self, Input, Ref};
 use crate::transcode;

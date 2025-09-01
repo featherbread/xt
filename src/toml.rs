@@ -6,7 +6,7 @@ use std::fmt;
 use std::io::{self, Write};
 use std::str;
 
-use serde::{de, ser, Deserialize};
+use serde::{Deserialize, de, ser};
 
 use crate::input::{self, Ref};
 
