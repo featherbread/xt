@@ -1,8 +1,8 @@
-## Unreleased
+## v0.19.5 (2025-08-31)
 
 ### Changed
 
-- **TOML output formatting.** This version of xt upgrades to the latest version
+- **TOML output formatting.** This version of xt upgrades to a newer version
   of the third-party `toml` library, which plays a critical role in xt's TOML
   support. The upgrade introduces cosmetic changes to the formatting of some
   strings, particularly strings containing quote characters or multiple lines.

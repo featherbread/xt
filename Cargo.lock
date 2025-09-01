@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "xt"
-version = "0.19.5-dev"
+version = "0.19.5"
 dependencies = [
  "criterion",
  "hex-literal",
