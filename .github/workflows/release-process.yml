@@ -166,6 +166,8 @@ jobs:
     if: ${{ github.ref == 'refs/heads/start-release' }}
     needs: merge-release
     runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -175,7 +177,10 @@ jobs:
         rustup toolchain install stable
         rustup default stable
         rustc --version
+    - name: Authenticate to Crates.io
+      id: crates-io-auth
+      uses: rust-lang/crates-io-auth-action@v1
     - name: Publish
       run: cargo publish
       env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}
