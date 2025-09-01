@@ -31,12 +31,12 @@ pub(crate) fn input_matches(mut input: Ref) -> io::Result<bool> {
 		}
 	};
 
-	let input_str = match str::from_utf8(input_buf) {
-		Ok(input_str) => input_str,
-		Err(_) => return Ok(false),
+	let Ok(input_str) = str::from_utf8(input_buf) else {
+		return Ok(false);
 	};
-
-	let de = ::toml::Deserializer::new(input_str);
+	let Ok(de) = ::toml::Deserializer::parse(input_str) else {
+		return Ok(false);
+	};
 	Ok(de::IgnoredAny::deserialize(de).is_ok())
 }
 
@@ -45,7 +45,7 @@ where
 	O: crate::Output,
 {
 	let input: Cow<'_, [u8]> = input.try_into()?;
-	let de = ::toml::Deserializer::new(str::from_utf8(&input)?);
+	let de = ::toml::Deserializer::parse(str::from_utf8(&input)?)?;
 	output.transcode_from(de)
 }
 
