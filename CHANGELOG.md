@@ -9,6 +9,15 @@
   These changes are not expected to affect interpretation by well-behaved TOML
   parsers.
 
+### Note
+
+Beginning with this release, GitHub Actions publishes xt to crates.io via
+[Trusted Publishing](https://crates.io/docs/trusted-publishing) to limit my
+personal use of long-lived API tokens. I make no long-term commitment to the
+continued use of Trusted Publishing, whose implementation as of writing requires
+that xt be hosted and built using proprietary services and infrastructure owned
+and operated by Microsoft Corporation.
+
 ## v0.19.4 (2025-02-23)
 
 ### Fixed
