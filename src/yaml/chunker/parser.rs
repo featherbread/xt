@@ -8,7 +8,7 @@
 //! [libyaml]: https://pyyaml.org/wiki/LibYAML
 
 use std::error::Error;
-use std::ffi::{CStr, c_char, c_void};
+use std::ffi::{c_char, c_void, CStr};
 use std::fmt::Display;
 use std::io::{self, Read};
 use std::mem::MaybeUninit;
@@ -44,21 +44,16 @@ where
 	R: Read,
 {
 	pub(super) fn new(reader: R) -> Parser<R> {
-		let mut parser: Box<yaml_parser_t>;
-
 		// SAFETY: This comes from libyaml, which we assume is implemented
 		// correctly. We expect initialization functions to properly handle
 		// uninitialized memory; empirical tests in Miri show this to be true.
-		unsafe {
-			// TODO: Use Box::new_uninit and Box::assume_init if our MSRV hits
-			// or exceeds 1.82.
-			let mut uninit = Box::new(MaybeUninit::<yaml_parser_t>::uninit());
-			if yaml_parser_initialize(uninit.as_mut_ptr()).ok {
-				parser = Box::from_raw(Box::into_raw(uninit).cast());
-			} else {
+		let mut parser = unsafe {
+			let mut uninit = Box::new_uninit();
+			if yaml_parser_initialize(uninit.as_mut_ptr()).fail {
 				panic!("out of memory for yaml_parser_initialize");
 			}
-		}
+			uninit.assume_init()
+		};
 
 		// libyaml needs a raw ReadState<R> pointer for Self::read_handler.
 		// Since mutable access through a Box invalidates derived pointers,
