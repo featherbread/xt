@@ -3,7 +3,7 @@
 use std::io::{self, BufReader, Read, Write};
 use std::str;
 
-use serde::{de, ser, Deserialize};
+use serde::{Deserialize, de, ser};
 
 use crate::input::{self, Input, Ref};
 use crate::transcode;
