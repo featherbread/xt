@@ -37,7 +37,7 @@ version = "0.7.0"
 features = ["html_reports"]
 
 [dev-dependencies.rstest]
-version = "0.24.0"
+version = "0.26.1"
 default-features = false
 
 [[bench]]
