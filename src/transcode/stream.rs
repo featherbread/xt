@@ -268,7 +268,7 @@ impl<S: Serializer> Visitor<S> {
 /// implementations, this eliminates a significant amount of signature-related
 /// boilerplate and makes it easier to focus on the actual mappings.
 macro_rules! xt_transcode_impl_scalar_visitors {
-	($($name:ident($($arg:ident: $ty:ty)?) => $op:expr_2021;)*) => {
+	($($name:ident($($arg:ident: $ty:ty)?) => $op:expr;)*) => {
 		$(fn $name<E: ::serde::de::Error>(self, $($arg: $ty)?) -> ::std::result::Result<Self::Value, E> {
 			self.forward_scalar($op)
 		})*

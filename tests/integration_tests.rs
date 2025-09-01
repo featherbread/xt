@@ -28,8 +28,8 @@ macro_rules! xt_assert_translation {
 	(
 		input_source = $input_source:path;
 		translator = $translator:path;
-		translation = $from:expr_2021 => $to:expr_2021;
-		source_format = $source_format:expr_2021;
+		translation = $from:expr => $to:expr;
+		source_format = $source_format:expr;
 	) => {
 		let input = $input_source($from);
 		let expected = $input_source($to);

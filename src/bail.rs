@@ -16,7 +16,7 @@ macro_rules! xt_bail {
 /// Formats a message to standard error that includes the provided file path,
 /// then terminates the current process with exit code 1.
 macro_rules! xt_bail_path {
-	($path:expr_2021, $fmt:literal $(, $($args:tt)* )?) => {{
+	($path:expr, $fmt:literal $(, $($args:tt)* )?) => {{
 		let _ = writeln!(
 			::std::io::stderr().lock(),
 			"xt error in {}: {}",

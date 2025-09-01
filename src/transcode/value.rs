@@ -79,7 +79,7 @@ impl Serialize for Value<'_> {
 ///
 /// This macro is non-hygienic, and not intended for use outside of this module.
 macro_rules! xt_transcode_impl_value_visitors {
-	($($name:ident($($arg:ident: $ty:ty)?) => $result:expr_2021;)*) => {
+	($($name:ident($($arg:ident: $ty:ty)?) => $result:expr;)*) => {
 		$(fn $name<E: de::Error>(self, $($arg: $ty)?) -> Result<Self::Value, E> {
 			Ok($result)
 		})*
