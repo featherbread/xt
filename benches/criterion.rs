@@ -18,7 +18,7 @@ macro_rules! xt_benchmark {
 		sources = $($source:ident),+;
 		loader = $loader:path;
 		translation = $from:path => $to:path;
-		$(group_config { $($setting_name:ident = $setting_value:expr;)* })?
+		$(group_config { $($setting_name:ident = $setting_value:expr_2021;)* })?
 	) => {
 		fn $name(c: &mut Criterion) {
 			let mut group = c.benchmark_group(stringify!($name));
