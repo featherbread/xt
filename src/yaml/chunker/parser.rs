@@ -8,7 +8,7 @@
 //! [libyaml]: https://pyyaml.org/wiki/LibYAML
 
 use std::error::Error;
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{CStr, c_char, c_void};
 use std::fmt::Display;
 use std::io::{self, Read};
 use std::mem::MaybeUninit;
