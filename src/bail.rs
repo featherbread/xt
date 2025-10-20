@@ -4,6 +4,7 @@
 /// with exit code 1.
 macro_rules! xt_bail {
 	($fmt:literal $(, $($args:tt)* )?) => {{
+		use ::std::io::Write;
 		let _ = writeln!(
 			::std::io::stderr().lock(),
 			"xt error: {}",
@@ -17,6 +18,7 @@ macro_rules! xt_bail {
 /// then terminates the current process with exit code 1.
 macro_rules! xt_bail_path {
 	($path:expr, $fmt:literal $(, $($args:tt)* )?) => {{
+		use ::std::io::Write;
 		let _ = writeln!(
 			::std::io::stderr().lock(),
 			"xt error in {}: {}",
