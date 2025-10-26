@@ -59,7 +59,7 @@ fn main() {
 	}
 
 	let mut stdin_used = false;
-	let mut output = pipecheck::Writer::new(BufWriter::new(stdout.lock()));
+	let mut output = pipecheck::wrap(BufWriter::new(stdout.lock()));
 	let mut translator = xt::Translator::new(&mut output, args.to);
 
 	let input_paths = if args.input_pathnames.is_empty() {
