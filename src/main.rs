@@ -38,7 +38,6 @@ use xt::Format;
 
 #[macro_use]
 mod bail;
-mod pipecheck;
 
 fn main() {
 	let args = match Cli::parse_args() {
