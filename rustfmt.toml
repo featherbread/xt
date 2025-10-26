@@ -1,3 +1,4 @@
+edition = "2024"
 style_edition = "2024"
 
 # Hard tabs provide significant accessibility benefits over Rust's preferred 4-space indentation.
