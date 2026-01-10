@@ -176,7 +176,7 @@ where
 				READ_SUCCESS
 			}
 			Ok(_) => {
-				read_state.error = Some(io::Error::new(io::ErrorKind::Other, "misbehaving reader"));
+				read_state.error = Some(io::Error::other("misbehaving reader"));
 				READ_FAILURE
 			}
 			Err(err) => {
