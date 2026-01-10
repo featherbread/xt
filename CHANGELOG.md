@@ -1,5 +1,12 @@
 ## Unreleased
 
+### Added
+
+- **TOML 1.1 support.** This version of xt upgrades to the latest version of
+  the third-party `toml` library, which supports new features from the recently
+  released TOML 1.1.0 spec: trailing commas in inline tables, optional seconds
+  in datetime values, and more.
+
 ### Changed
 
 - **Rust 1.85 or higher is required to build xt.** This change enables continued

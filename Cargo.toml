@@ -24,7 +24,7 @@ serde_yaml = "0.9.34"
 unsafe-libyaml = "0.2.11"
 
 [dependencies.toml]
-version = "0.9.5"
+version = "0.9.11"
 features = ["preserve_order"]
 
 [target.'cfg(unix)'.dependencies]
