@@ -334,9 +334,9 @@ checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
 
 [[package]]
 name = "pipecheck"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "292b30f4289ba1212b7cbef776ef966e3e8522138f166e3bca71b48d94734f1c"
+checksum = "3b79831bec3a5adb5c60cde00d893287857790d3fe0efba247f98b552a8e3ade"
 dependencies = [
  "libc",
 ]
