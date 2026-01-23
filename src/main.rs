@@ -73,8 +73,8 @@ fn main() {
 			Err(err) => xt_bail_path!(path, "{err}"),
 		};
 		if let Input::Stdin = input {
-			// TODO: Is this check really worth it? We don't stop anyone from
-			// passing /dev/stdin more than once.
+			// TODO: Is this check worth it? You can pass /dev/stdin more than once, though the
+			// behavior might be weird.
 			if stdin_used {
 				xt_bail!("cannot read from standard input more than once");
 			}
@@ -243,8 +243,8 @@ fn usage_name() -> Cow<'static, str> {
 	}
 }
 
-/// Returns the full version string for the program (including the crate name)
-/// based on Cargo metadata, or a default if Cargo metadata is unavailable.
+/// Returns the full version string for the program (including the crate name) based on Cargo
+/// metadata, or a default if Cargo metadata is unavailable.
 const fn version_string() -> &'static str {
 	if env!("CARGO_PKG_NAME").is_empty() || env!("CARGO_PKG_VERSION").is_empty() {
 		"xt 0.0.0-unknown"
@@ -281,36 +281,30 @@ impl InputPath {
 			Self::File(path) => File::open(path)?,
 		};
 
-		// (UN)SAFETY: An Mmap provides access to arbitrary file data as a
-		// &[u8], and it is Undefined Behavior for the data behind a &[u8] to
-		// change. However, this CAN happen if the mapped file is modified
-		// outside of the process.
+		// (UN)SAFETY: An Mmap provides access to arbitrary file data as a &[u8], and it's
+		// Undefined Behavior for the data behind a &[u8] to change. However, this _can_ happen
+		// if the mapped file is modified outside of the process.
 		//
 		// Our solution? We tell users not to do that in the help output.
 		//
-		// No, this is NOT a real solution, and does NOT provide any actual
-		// safety guarantee. It's a risk taken intentionally based on a
-		// pragmatic understanding of the failure modes most likely to appear
-		// when the UB is invoked, i.e. that we are significantly more likely to
-		// see xt die from a SIGBUS or silently produce invalid output than we
-		// are to see demons *actually* fly out of somebody's nose (see
-		// "Undefined behavior" on Wikipedia for more about this phenomenon).
+		// No, this is _not_ a real solution, and does _not_ provide a proper safety guarantee.
+		// It's a risk taken intentionally based on a pragmatic understanding of the failure modes
+		// most likely to appear when the UB is invoked: we're significantly more likely to see xt
+		// die from a SIGBUS or silently produce invalid output than we are to see demons fly out
+		// of somebody's nose (per https://en.wikipedia.org/wiki/Undefined_behavior).
 		//
-		// We take this risk because performance testing shows that translating
-		// a slice is often significantly more efficient than translating a
-		// reader, and because a memory map should give the OS smarter memory
-		// management options compared to simply reading the contents of a file
-		// into a buffer, especially when memory is at a premium or the file is
-		// unusually large. However, this justification should be treated with
-		// skepticism, and more research into possible safety enhancements is
-		// likely warranted.
+		// We take this risk because performance testing shows that translating a slice is often
+		// far more efficient than translating a reader, and because a memory map should give the
+		// OS smarter memory management options compared to a buffer in anonymous memory,
+		// especially when memory is at a premium or the file is unusually large. However,
+		// this justification should be treated with skepticism, and it would be nice to
+		// find and adopt any safety enhancements we can.
 		if let Ok(map) = unsafe { memmap2::Mmap::map(&file) } {
 			#[cfg(unix)]
 			{
-				// Make a best-effort attempt to advise the system that we will
-				// soon access these pages sequentially. madvise failures on
-				// these two values should not affect the normal functionality
-				// of the mapping, so we intentionally ignore these Results.
+				// Make a best-effort attempt to advise the system that we'll soon access these
+				// pages sequentially. madvise failures on these values shouldn't affect the
+				// mapping's normal functionality, so we ignore errors.
 				let _ = map.advise(memmap2::Advice::Sequential);
 				let _ = map.advise(memmap2::Advice::WillNeed);
 			}
@@ -318,8 +312,7 @@ impl InputPath {
 			return Ok(Input::Mmap(map));
 		}
 
-		// If mmap fails (process substitution, named pipes, etc.), fall back to
-		// reader-based input.
+		// If mmap fails (process substitution, named pipes, etc.), fall back to reader input.
 		Ok(Input::File(file))
 	}
 
