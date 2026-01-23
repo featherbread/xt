@@ -39,30 +39,24 @@ where
 {
 	match input.into() {
 		Input::Slice(b) => {
-			// Direct transcoding here would be nice, however the .end() method
-			// that we rely on is extremely slow in slice mode. serde_json only
-			// supports iteration if we allow it to deserialize into an actual
-			// value, so xt implements a value type that can borrow strings from
-			// the input slice (one of serde's major features).
+			// Direct transcoding would be nice, but the .end() method is unusually slow in slice
+			// mode. serde_json only supports iteration if we let it deserialize into a value,
+			// so xt implements a value type that borrows strings from the input.
 			//
-			// Per RFC 8259: "JSON text exchanged between systems that are not
-			// part of a closed ecosystem MUST be encoded using UTF-8." In my
-			// testing, an upfront UTF-8 check on the entire input nets as much
-			// as a 20% performance improvement compared to allowing serde_json
-			// to check UTF-8 validity as it parses a byte slice. The drawback
-			// is that UTF-8 encoding errors will only provide a byte position
-			// rather than full line and column information. In this case, I
-			// think the performance improvement is the more justifiable option.
+			// Per RFC 8259: "JSON text exchanged between systems that are not part of a closed
+			// ecosystem MUST be encoded using UTF-8." In my testing, an upfront UTF-8 check nets
+			// as much as a 20% performance improvement compared to serde_json checking UTF-8
+			// validity as it parses a byte slice. The drawback is that UTF-8 encoding errors only
+			// provide a byte position rather than line and column information. I consider the
+			// performance improvement worth that drawback.
 			let de = serde_json::Deserializer::from_str(str::from_utf8(&b)?);
 			for value in de.into_iter::<transcode::Value>() {
 				output.transcode_value(value?)?;
 			}
 		}
 		Input::Reader(r) => {
-			// Direct transcoding here performs better than deserializing into a
-			// value. It looks like transcode::Value is forced to copy every
-			// string from a &str reference, which probably explains the
-			// difference.
+			// Direct transcoding here performs better than deserializing into a value, probably
+			// because transcode::Value is forced to copy every string from a &str reference.
 			let mut de = serde_json::Deserializer::from_reader(BufReader::new(r));
 			while de.end().is_err() {
 				output.transcode_from(&mut de)?;
