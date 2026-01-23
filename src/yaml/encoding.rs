@@ -152,6 +152,8 @@ where
 
 /// The required size of a buffer large enough to encode any `char` as UTF-8,
 /// per [`char::encode_utf8`].
+///
+/// TODO: Migrate to [`char::MAX_LEN_UTF8`] at MSRV 1.93+.
 const MAX_UTF8_ENCODED_LEN: usize = 4;
 
 /// A streaming UTF-8 encoder that pairs with [`Utf16Decoder`] or
