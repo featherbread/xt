@@ -13,20 +13,18 @@ use crate::transcode;
 
 /// The maximum allowed nesting depth of MessagePack values.
 ///
-/// This particular value is the undocumented default from [`rmp_serde`], which
-/// seems to be enough to reliably prevent stack overflows on debug builds of
-/// the program using the default main thread stack size on Linux and macOS.
+/// This particular value is the undocumented default from [`rmp_serde`], which seems to reliably
+/// prevent stack overflows on debug builds using the default main thread stack size on Linux and
+/// macOS.
 const DEPTH_LIMIT: usize = 1024;
 
 pub(crate) fn input_matches(mut input: Ref) -> io::Result<bool> {
-	// In MessagePack, any byte below 0x80 represents a literal unsigned
-	// integer. That means any ASCII text input is a valid multi-document
-	// MessagePack stream, where every "document" is practically meaningless. To
-	// prevent these kinds of weird matches, we only detect input as MessagePack
-	// when the first byte indicates that the next value will be a map or array.
-	// Arbitrary non-ASCII input that happens to match one of these markers
-	// (e.g. certain UTF-8 multibyte sequences) is extremely unlikely to be a
-	// valid sequence of MessagePack values.
+	// In MessagePack, any byte below 0x80 represents a literal unsigned integer. That means any
+	// ASCII text input is a valid multi-document MessagePack stream, where every "document" is
+	// practically meaningless. To prevent these kinds of weird matches, we only detect input as
+	// MessagePack when the first byte indicates that the next value will be a map or array.
+	// Arbitrary non-ASCII input that happens to match one of these markers (e.g. certain UTF-8
+	// multibyte sequences) is extremely unlikely to be a valid sequence of MessagePack values.
 	if !matches!(
 		input.prefix(1)?.first().copied().map(Marker::from_u8),
 		Some(
@@ -124,20 +122,18 @@ impl<W: Write> crate::Output for Output<W> {
 	}
 }
 
-/// Returns the size in bytes of the MessagePack value at the start of the input
-/// slice.
+/// Returns the size in bytes of the MessagePack value at the start of the input slice.
 ///
-/// Data after the MessagePack value at the start of the input is ignored. The
-/// size of an empty input slice is 0.
+/// Data after the MessagePack value at the start of the input is ignored.
+/// The size of an empty input slice is 0.
 ///
-/// This function guarantees that the input can be sliced to the returned size
-/// without panicking, even if the input is not well-formed. For example, a
-/// MessagePack str or bin value with a reported length larger than the
-/// remainder of the input slice will produce an error.
+/// This function guarantees that the input can be sliced to the returned size without panicking,
+/// even if the input is not well-formed. For example, a MessagePack str or bin value with a
+/// reported length larger than the remainder of the input slice produces an error.
 ///
-/// TODO: A [`ReadRefReader`][rmp_serde::decode::ReadRefReader] could directly
-/// tell us how much of its input slice is remaining if we could access it from
-/// a `Deserializer`. That would remove the need for this custom logic.
+/// TODO: A [`ReadRefReader`][rmp_serde::decode::ReadRefReader] could directly tell us how much of
+/// its input slice is remaining if we could access it from a `Deserializer`. That would remove the
+/// need for this custom logic.
 fn next_value_size(input: &[u8], depth_limit: usize) -> Result<usize, ReadSizeError> {
 	if depth_limit == 0 {
 		return Err(ReadSizeError::DepthLimitExceeded);
@@ -456,11 +452,10 @@ mod tests {
 		let mut input = [0x91_u8; DEPTH_LIMIT];
 		*input.last_mut().unwrap() = 0xc0;
 
-		// See https://stackoverflow.com/a/42960702. Cargo runs tests on
-		// secondary threads, which by default have 2 MiB stacks (per
-		// std::thread docs as of writing). This is apparently too small to
-		// properly test the normal depth limit, so we run these cases with
-		// stacks that better approximate a typical main thread.
+		// See https://stackoverflow.com/a/42960702. Cargo runs tests on secondary threads, which
+		// by default have 2 MiB stacks (per std::thread docs as of writing). This is apparently
+		// too small to properly test the normal depth limit, so we run these cases with stacks
+		// that better approximate a typical main thread.
 		std::thread::Builder::new()
 			.stack_size(8 * 1024 * 1024)
 			.spawn(move || {
