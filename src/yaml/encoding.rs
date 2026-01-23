@@ -1,33 +1,26 @@
 //! Streaming text encoding support for YAML 1.2 streams.
 //!
-//! xt's needs for text encoding don't overlap especially well with the feature
-//! sets that the popular text encoding crates (`encoding` and `encoding_rs`)
-//! provide. Both of these crates are designed around the WHATWG Encoding
-//! Standard, which has two important consequences:
+//! xt's needs for text encoding don't overlap well with the feature sets that popular text
+//! encoding crates (`encoding` and `encoding_rs`) provide. Both of those crates are designed
+//! around the WHATWG Encoding Standard, which has two consequences:
 //!
-//! 1. Both crates support far more text encodings than we actually need, since
-//!    YAML only requires support for Unicode-based encodings, and not legacy
-//!    code pages or other encodings. A past attempt to integrate `encoding_rs`
-//!    into xt increased the size of the full release binary by about 10%,
-//!    despite the fact that we weren't leveraging its full flexibility. In
-//!    contrast, xt's encoding module increases the binary size by less than 2%.
+//! 1. Both crates support far more text encodings than we need, since YAML only requires support
+//!    for Unicode-based encodings (not code pages, for example). A past attempt to integrate
+//!    `encoding_rs` into xt increased the size of the full release binary by about 10%, despite us
+//!    not leveraging its full flexibility. In contrast, xt's encoding module increases the binary
+//!    size by less than 2%.
 //!
-//! 2. Neither crate supports UTF-32. While UTF-32 is an exceptionally rare
-//!    encoding, it is called out as a possibility in the YAML 1.2 spec, and
-//!    as such it's something I'm interested in supporting if possible.
+//! 2. Neither crate supports UTF-32. While it's an exceptionally rare encoding, the YAML 1.2 spec
+//!    calls it out as a requirement, so I'm interested in supporting it if possible.
 //!
-//! Beyond these two points, xt's encoder provides a natural [`Read`]-based
-//! interface that integrates easily with xt's other streaming components, which
-//! does not seem to be readily available from the third-party crates.
+//! Beyond these two points, xt's encoder provides a natural [`Read`]-based interface that
+//! integrates easily with xt's other streaming components, which doesn't seem to be readily
+//! available from the third-party crates.
 //!
-//! Obviously, there is some additional mental load and long-term maintenance
-//! cost associated with implementing this kind of thing from scratch. To help
-//! manage that cost, the design of this module is kept relatively simple: a
-//! UTF-8 encoder operates on an [`Iterator`] of `io::Result<char>`, which is
-//! provided by a UTF-16 or UTF-32 decoder. Endianness is represented at a value
-//! level rather than a type level to reduce the number of type instantiations.
-//! All of the core functionality either directly relies on or is heavily
-//! inspired by the Rust standard library.
+//! The design prioritizes low complexity over performance. UTF-16 and UTF-32 decoders provide
+//! iterators of `io::Result<char>`, which the UTF-8 encoder's [`Read`] impl pulls from. Endianness
+//! is represented by values to reduce the number of type instantiations. The implementation fully
+//! relies on or is inspired by the Rust standard library.
 
 use std::cmp::min;
 use std::error::Error;
@@ -47,17 +40,14 @@ impl Encoding {
 	/// The desired length of the prefix for encoding detection.
 	pub(super) const DETECT_LEN: usize = 4;
 
-	/// Detects the text encoding of a YAML 1.2 stream based on its leading
-	/// bytes.
+	/// Detects the text encoding of a YAML 1.2 stream based on its leading bytes.
 	///
-	/// The detection algorithm is defined in [section 5.2 of the YAML 1.2.2
-	/// specification][spec], and relies on the fact that a valid YAML stream
-	/// must begin with either a Unicode byte order mark or an ASCII character.
-	/// Detection behavior for non-YAML inputs is not well-defined.
+	/// The detection algorithm is defined in [section 5.2 of the YAML 1.2.2 specification][spec],
+	/// and relies on the fact that a valid YAML stream must begin with either a Unicode byte order
+	/// mark or an ASCII character. Detection behavior for non-YAML inputs is not well-defined.
 	///
-	/// The detector looks at up to 4 bytes of the prefix. If the prefix is less
-	/// than 4 bytes and the document is longer than the prefix, the result of
-	/// the detection may be incorrect.
+	/// The detector looks at up to 4 bytes of the prefix. If the prefix is less than 4 bytes and
+	/// the document is longer than the prefix, the result of the detection may be incorrect.
 	///
 	/// [spec]: https://yaml.org/spec/1.2.2/#52-character-encodings
 	pub(super) fn detect(prefix: &[u8]) -> Encoding {
@@ -75,19 +65,16 @@ impl Encoding {
 				_ => {}
 			};
 		}
-		// The spec implies that we should try to match a UTF-8 BOM, but since
-		// UTF-8 is also the default case there's no good reason to.
+		// The spec implies that we should try to match a UTF-8 BOM, but since UTF-8 is the default
+		// there's no reason to.
 		Encoding::Utf8
 	}
 }
 
 /// Reads a YAML 1.2 stream as UTF-8 regardless of its source encoding.
 ///
-/// Given a UTF-16 or UTF-32 YAML stream, an `Encoder` can transparently
-/// re-encode it to UTF-8 and strip any initial byte order mark as it is read
-/// from, improving compatibility with parsers that do not accept the full range
-/// of supported YAML encodings. Otherwise, an `Encoder` can pass through a
-/// UTF-8 stream with little overhead.
+/// `Encoder` strips any initial byte order mark from UTF-16 or UTF-32 source streams, and passes
+/// through UTF-8 streams with marginal runtime overhead.
 pub(super) struct Encoder<R>(EncoderKind<R>)
 where
 	R: BufRead;
@@ -120,12 +107,8 @@ where
 		})
 	}
 
-	/// Creates an encoder by detecting the source encoding from the first bytes
-	/// of the reader.
-	///
-	/// See [`Encoding::detect`] for details of the detection process. Note that
-	/// `from_reader` provides as many prefix bytes to the detector as it needs
-	/// for accurate detection.
+	/// Creates an encoder by detecting the source encoding from the first bytes of the reader.
+	/// See [`Encoding::detect`] for details.
 	pub(super) fn from_reader(mut reader: R) -> io::Result<impl Read> {
 		let mut prefix = ArrayBuffer::<{ Encoding::DETECT_LEN }>::new();
 		io::copy(
@@ -150,17 +133,14 @@ where
 	}
 }
 
-/// The required size of a buffer large enough to encode any `char` as UTF-8,
-/// per [`char::encode_utf8`].
+/// The required size of a buffer large enough to encode any `char` as UTF-8, per
+/// [`char::encode_utf8`].
 ///
 /// TODO: Migrate to [`char::MAX_LEN_UTF8`] at MSRV 1.93+.
 const MAX_UTF8_ENCODED_LEN: usize = 4;
 
-/// A streaming UTF-8 encoder that pairs with [`Utf16Decoder`] or
-/// [`Utf32Decoder`].
-///
-/// If the source document starts with a BOM, the encoder will skip it and
-/// reading will begin with the actual text content.
+/// A streaming UTF-8 encoder that pairs with [`Utf16Decoder`] or [`Utf32Decoder`],
+/// re-encoding their contents and skipping any initial BOM.
 struct Utf8Encoder<S>
 where
 	S: Iterator<Item = io::Result<char>>,
@@ -202,8 +182,8 @@ where
 	fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
 		let mut written = 0;
 
-		// First, before encoding any new characters, emit the remainder of any
-		// character generated by a previous read.
+		// First, before encoding any new characters, emit the remainder of any character generated
+		// by a previous read.
 		if !self.remainder.is_empty() {
 			let len = self.remainder.read(buf)?;
 			buf = &mut buf[len..];
@@ -225,9 +205,8 @@ where
 			written += len;
 		}
 
-		// Finally, emit as much as we can into the destination buffer's
-		// remaining space, storing the remainder of any character that we
-		// cannot fully emit at this time.
+		// Finally, emit as much as we can into the destination buffer's remaining space, storing
+		// the remainder of any character we can't fully emit at this time.
 		while !buf.is_empty() {
 			let ch = match self.next_char() {
 				Some(Ok(ch)) => ch,
@@ -294,9 +273,8 @@ where
 	type Item = io::Result<char>;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		// This is based on the implementation of `std::char::DecodeUtf16` from
-		// the standard library, but is reworked slightly to better support I/O
-		// error handling and apply some Clippy style suggestions.
+		// This is based on `std::char::DecodeUtf16` from the standard library, but is reworked
+		// slightly to better support I/O error handling and apply Clippy style suggestions.
 
 		let pos = self.pos;
 		let lead = match self.buf.take() {
@@ -309,8 +287,8 @@ where
 		};
 		match lead {
 			0x0000..=0xD7FF | 0xE000..=0xFFFF => {
-				// SAFETY: This is not a UTF-16 surrogate, which means that the
-				// u16 code unit directly encodes the desired code point.
+				// SAFETY: This is not a UTF-16 surrogate, which means that the u16 code unit
+				// directly encodes the desired code point.
 				return Some(Ok(unsafe { char::from_u32_unchecked(u32::from(lead)) }));
 			}
 			// Leading surrogate; continue on to decode the trailing surrogate.
@@ -326,14 +304,14 @@ where
 			Err(err) => return Some(Err(err)),
 		};
 		if !(0xDC00..=0xDFFF).contains(&trail) {
-			// We needed a trailing surrogate and didn't get one. We'll try to
-			// decode this as a leading code unit on the next iteration.
+			// We needed a trailing surrogate and didn't get one. We'll try to decode this
+			// as a leading code unit on the next iteration.
 			self.buf = Some(trail);
 			return Some(Err(EncodingError::new(trail, pos).into()));
 		}
 
-		// SAFETY: All of the above checks have confirmed that the two code
-		// units form a valid surrogate pair.
+		// SAFETY: All of the above checks have confirmed that the two code units form
+		// a valid surrogate pair.
 		Some(Ok(unsafe {
 			char::from_u32_unchecked(
 				0x10000 + ((u32::from(lead - 0xD800) << 10) | u32::from(trail - 0xDC00)),
@@ -469,17 +447,15 @@ where
 
 /// A reusable fixed-size buffer with one-way read and write support.
 ///
-/// The array backing an `ArrayBuffer` is logically divided into three
-/// contiguous sections:
+/// The array backing an `ArrayBuffer` is logically divided into three contiguous sections:
 ///
 /// - The *read* section, whose contents have been consumed by previous reads.
 /// - The *unread* section, which future reads will produce from.
 /// - The *unwritten* section, which future writes will populate.
 ///
-/// Writes append to the unread section of the array, shrinking the unwritten
-/// section. The space in the read section is never reclaimed automatically for
-/// future writes. Instead, an `ArrayBuffer` can be emptied and reinitialized
-/// using `set`, optionally with an initial slice of unread bytes.
+/// Writes append to the unread section of the array, shrinking the unwritten section. The space in
+/// the read section is never reclaimed automatically for future writes. Instead, an `ArrayBuffer`
+/// can be emptied and reinitialized using `set`, optionally with an initial slice of unread bytes.
 struct ArrayBuffer<const SIZE: usize> {
 	buf: [u8; SIZE],
 	pos: usize,
@@ -507,8 +483,7 @@ impl<const SIZE: usize> ArrayBuffer<SIZE> {
 		self.unread().is_empty()
 	}
 
-	/// Empties and reinitializes the buffer, optionally with an initial slice
-	/// of unread bytes.
+	/// Empties and reinitializes the buffer, optionally with an initial slice of unread bytes.
 	///
 	/// # Panics
 	///
@@ -676,10 +651,9 @@ mod tests {
 			.unwrap()
 			.downcast_ref::<EncodingError<u16>>()
 			.unwrap();
-		// TODO: We intentionally say that the "unexpected" code unit is the one
-		// that isn't a trailing surrogate, which is technically correct but
-		// could be more detailed (i.e. we should perhaps say that there's an
-		// unpaired surrogate and give that position instead).
+		// TODO: We say that the "unexpected" code unit is the one that isn't a trailing surrogate,
+		// which is technically correct but could be more detailed. Perhaps we should say there's
+		// an unpaired surrogate and give that position instead.
 		assert_eq!(err.unit, 0x0a);
 		assert_eq!(err.pos, 6);
 	}
