@@ -15,11 +15,11 @@ use self::chunker::Chunker;
 use self::encoding::{Encoder, Encoding};
 
 pub(crate) fn input_matches(mut input: Ref) -> io::Result<bool> {
-	// YAML can be surprisingly liberal in what it accepts. In particular, the
-	// contents of many non-YAML text documents can actually be parsed as YAML
-	// scalars, such as TOML documents that do not start with a table. To
-	// prevent these kinds of weird matches, we only detect input as YAML when
-	// the first document in the stream encodes a collection (map or sequence).
+	// YAML can be surprisingly liberal in what it accepts. Many non-YAML text documents can be
+	// parsed as a YAML scalar (i.e. a giant string), including TOML documents that start with
+	// plain key-value assignments rather than a table header. To prevent these kinds of weird
+	// matches, we only detect input as YAML when the first document in the stream encodes a
+	// collection (map or sequence).
 	let encoding = Encoding::detect(input.prefix(Encoding::DETECT_LEN)?);
 	let chunk = match &mut input {
 		Ref::Slice(b) => Chunker::new(Encoder::new(b, encoding)).next(),
@@ -47,8 +47,7 @@ where
 				Ok(())
 			}
 			Err(_) => {
-				// The reader path supports automatic re-encoding of UTF-16 and
-				// UTF-32 input. See transcode_reader for details.
+				// The reader path re-encodes UTF-16 and UTF-32. See transcode_reader for details.
 				transcode_reader(&*b, output)
 			}
 		},
@@ -60,26 +59,22 @@ where
 	R: BufRead,
 	O: crate::Output,
 {
-	// serde_yaml imposes a couple of interesting limitations on us, which
-	// aren't clear from the documentation alone but are reflected in this
-	// usage.
+	// serde_yaml imposes a couple of interesting limitations on us, which aren't clear from its
+	// documentation but are reflected in this usage.
 	//
-	// First, while serde_yaml supports creating a Deserializer from a reader,
-	// this actually slurps the entire input into a buffer for parsing. We
-	// support streaming parsing by implementing our own "chunker" that splits
-	// an unbounded YAML stream into a sequence of buffered documents. This is a
-	// terrible hack, and I sincerely hope that I will have the time and energy
-	// someday to implement true streaming support in serde_yaml.
+	// First, while serde_yaml supports creating a Deserializer from a reader, this actually slurps
+	// the entire input into a buffer for parsing. We support streaming parsing by implementing our
+	// own "chunker" that splits an unbounded YAML stream into a sequence of buffered documents.
+	// This is a terrible hack, and I'd love to have the time and energy someday to implement
+	// something more proper.
 	//
-	// Second, serde_yaml does not support UTF-16 or UTF-32 input, even though
-	// YAML 1.2 requires this. In addition to our chunker, we implement a
-	// streaming encoder that can detect the encoding of any valid YAML stream
-	// and convert it to UTF-8. The encoder will also strip any byte order mark
-	// from the beginning of the stream, as serde_yaml will choke on it. This
-	// still doesn't cover the full YAML spec, which also allows BOMs in UTF-8
-	// streams and at the starts of individual documents in the stream.
-	// However, these cases should be much rarer than that of a single BOM at
-	// the start of a UTF-16 or UTF-32 stream.
+	// Second, serde_yaml doesn't support UTF-16 or UTF-32, even though YAML 1.2 requires both.
+	// In addition to our chunker, we implement a streaming encoder that can detect the encoding of
+	// any valid YAML stream and convert it to UTF-8. The encoder also strips any byte order mark
+	// from the beginning of the stream, as serde_yaml will choke on it. This still doesn't cover
+	// the full YAML spec, which allows BOMs in UTF-8 streams and at the starts of individual
+	// documents in the stream. Hopefully these cases are rarer than that of a single BOM at the
+	// start of a UTF-16 or UTF-32 stream.
 	for doc in Chunker::new(Encoder::from_reader(input)?) {
 		let doc = doc?;
 		let de = serde_yaml::Deserializer::from_str(doc.content());
