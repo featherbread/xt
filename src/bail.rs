@@ -1,7 +1,6 @@
 //! Top-level error handling for the xt binary.
 
-/// Formats a message to standard error, then terminates the current process
-/// with exit code 1.
+/// Formats a message to standard error, then terminates the current process with exit code 1.
 macro_rules! xt_bail {
 	($fmt:literal $(, $($args:tt)* )?) => {{
 		use ::std::io::Write;
@@ -14,8 +13,8 @@ macro_rules! xt_bail {
 	}};
 }
 
-/// Formats a message to standard error that includes the provided file path,
-/// then terminates the current process with exit code 1.
+/// Formats a message to standard error, including the provided file path, then terminates the
+/// current process with exit code 1.
 macro_rules! xt_bail_path {
 	($path:expr, $fmt:literal $(, $($args:tt)* )?) => {{
 		use ::std::io::Write;
