@@ -1,14 +1,13 @@
 //! Streaming translation between Serde data formats.
 //!
-//! xt's streaming transcoder is somewhat inspired by the [`serde_transcode`]
-//! crate advertised in the Serde documentation. However, its implementation has
-//! diverged significantly to enable the preservation of original (de)serializer
-//! error values, in contrast to `serde_transcode`'s approach of stringifying
-//! errors to meet Serde API requirements.
+//! xt's streaming transcoder is inspired by the [`serde_transcode`] crate advertised in the Serde
+//! documentation. However, its implementation has diverged significantly to enable preservation of
+//! original (de)serializer error values, in contrast to `serde_transcode` stringifying errors to
+//! meet Serde API requirements.
 //!
-//! This capability comes at the cost of significant implementation complexity.
-//! If it is not an absolute requirement for your use case, you should probably
-//! stick with the simpler, more mature, and more popular `serde_transcode`.
+//! This capability comes at the cost of significant implementation complexity. If it's not an
+//! absolute requirement for your use case, you should probably stick with the simpler,
+//! more mature, and more popular `serde_transcode`.
 //!
 //! [`serde_transcode`]: https://github.com/sfackler/serde-transcode
 
@@ -21,40 +20,33 @@ use serde::ser::{self, Serialize, SerializeMap, SerializeSeq, Serializer};
 
 /// The message used to generate generic serializer and deserializer errors.
 ///
-/// When transcoding fails due to a serializer error, this message could make
-/// its way into the text of the resulting deserializer error, depending on the
-/// specific deserializer in use.
+/// When transcoding fails due to a serializer error, this message could make its way into the text
+/// of the resulting deserializer error, depending on the specific deserializer in use.
 const TRANSLATION_FAILED: &str = "translation failed";
 
 /// Transcodes from a Serde `Deserializer` to a Serde `Serializer`.
 ///
-/// The transcoding process forwards values produced by a deserializer directly
-/// to a serializer, without collecting the entire output of the deserializer
-/// into an intermediate data structure.
+/// The transcoding process forwards values produced by a deserializer directly to a serializer,
+/// without collecting the entire output of the deserializer into an intermediate data structure.
 ///
-/// An error in either the serializer or deserializer will immediately halt
-/// transcoding. See [`Error`] for information about how to interpret a
-/// transcoding error.
+/// An error in either the serializer or deserializer immediately halts transcoding.
+/// See [`Error`] for information about how to interpret a transcoding error.
 ///
 /// # Caveats
 ///
-/// - The transcoder does not validate the output of the deserializer in any
-///   meaningful way. For example, it does not impose recursion limits on the
-///   deserialized data, nor does it prevent the deserialization of values that
-///   a particular serializer may not support.
+/// - The transcoder doesn't validate the deserializer's output in any meaningful way. For example,
+///   it doesn't impose recursion limits on the deserialized data, nor does it prevent
+///   deserialization of values that the serializer doesn't support.
 ///
-/// - Transcoding is only possible for self-describing data formats; that is,
-///   formats where the types of values can be determined from the serialized
-///   representation itself.
+/// - Transcoding is only possible for self-describing data formats; that is, formats where the
+///   types of values can be determined from the serialized representation itself.
 ///
-/// - While the transcoding process itself does not collect the deserializer's
-///   entire output, certain (de)serializers may do so as part of their
-///   implementation.
+/// - While the transcoding process itself doesn't collect the deserializer's entire output,
+///   certain (de)serializers may do so as part of their implementation.
 ///
-/// - The current transcoder implementation does not handle all types supported
-///   by Serde. It only handles types that a deserializer for a self-describing
-///   data format would reasonably be expected to produce (i.e. not
-///   Rust-specific types like `Option<T>` or newtype structs).
+/// - The current transcoder implementation doesn't handle all types supported by Serde. It only
+///   handles types that a deserializer for a self-describing data format would reasonably be
+///   expected to produce (i.e. not Rust-specific types like `Option<T>` or newtype structs).
 pub(crate) fn transcode<'de, S, D>(ser: S, de: D) -> Result<S::Ok, Error<S::Error, D::Error>>
 where
 	S: Serializer,
@@ -72,22 +64,20 @@ where
 
 /// Holds an error produced during transcoding.
 ///
-/// A transcoding error indicates which side of the transcode originally
-/// triggered the failure, and provides access to the original error value(s)
-/// generated by the serializer and/or deserializer.
+/// A transcoding error indicates which side of the transcode originally triggered the failure, and
+/// provides access to the original error value(s) generated by the serializer and/or deserializer.
 #[derive(Debug)]
 pub(crate) enum Error<S, D>
 where
 	S: ser::Error,
 	D: de::Error,
 {
-	/// The serializer triggered the transcode failure, for example due to an
-	/// input value it could not handle. The included deserializer error may
-	/// provide useful context, such as the location of the value that the
-	/// serializer could not handle.
+	/// The serializer triggered the transcode failure, for example due to an input value it
+	/// couldn't handle. The included deserializer error may provide useful context, such as the
+	/// line and column where transcoding failed.
 	Ser(S, D),
-	/// The deserializer triggered the transcode failure, for example due to a
-	/// syntax error in the input.
+	/// The deserializer triggered the transcode failure, for example due to a syntax error
+	/// in the input.
 	De(D),
 }
 
@@ -117,60 +107,50 @@ where
 	}
 }
 
-/// The internal representation of the side of the transcode operation that
-/// originally failed.
+/// The internal representation of the side of the transcode operation that originally failed.
 ///
-/// Since the transcoder may need to generate a synthetic serializer error to
-/// back out from a deserializer failure, the fact that a serializer error made
-/// it up the call stack doesn't mean that the serializer caused the failure.
-/// The transcoder explicitly tracks this information so that it can discard
-/// these synthetic errors instead of returning them to the user.
+/// Since the transcoder may need to generate a synthetic serializer error to back out from a
+/// deserializer failure, the fact that a serializer error made it up the call stack doesn't mean
+/// the serializer caused the failure. The transcoder explicitly tracks this so it can discard its
+/// synthetic errors instead of returning them to the user.
 #[derive(Clone, Copy)]
 enum ErrorSource {
 	De,
 	Ser,
 }
 
-/// The internal state of a single transcoding step, holding data that cannot
-/// cross normal Serde API boundaries.
+/// The internal state of a single transcoding step, holding data that can't cross normal
+/// Serde API boundaries.
 ///
-/// The transcoding process relies on special implementations of core Serde
-/// traits like [`Serialize`] and [`de::Visitor`]. In order to preserve the
-/// original values of (de)serializer errors across Serde API boundaries that
-/// cannot represent them directly, and to account for the fact that many Serde
-/// trait methods can only be called on owned values (i.e. they consume `self`),
-/// the transcoder's implementations of Serde trait methods follow a common
-/// pattern:
+/// The transcoding process relies on special implementations of key Serde traits like
+/// [`Serialize`] and [`de::Visitor`]. To preserve the original values of (de)serializer errors
+/// across Serde API boundaries that can't represent them directly, and to account for the fact
+/// that many Serde trait methods consume `self`, the transcoder's implementations of Serde trait
+/// methods follow a common pattern:
 ///
-/// 1. Take ownership of some "parent" value: either the serializer type to
-///    which the next deserialized value should be forwarded, or the
-///    deserializer type that will produce the next value.
+/// 1. Take ownership of some "parent" value: either the serializer to which the next deserialized
+///    value should be forwarded, or the deserializer that will produce the next value.
 ///
-/// 2. Call some method of the parent, possibly with a value that was passed to
-///    us as an argument, consuming the parent and producing a [`Result`] of
-///    generic value and error types.
+/// 2. Call some method of the parent, possibly with a value that was passed to us as an argument,
+///    consuming the parent and producing a [`Result`] of generic value and error types.
 ///
-/// 3. If the parent returned an error that we cannot return directly, capture
-///    that original error value (and its source) and instead return whatever
-///    error type our method signature requires, either by extracting it from a
-///    child `State` or constructing it with a well-known message string (which
-///    is the only capability that Serde's error traits require; they cannot be
+/// 3. If the parent returned an error that we can't return directly, capture that original error
+///    value (and its source) and instead return whatever error type our method signature requires,
+///    either by extracting it from a child `State` or constructing it with a well-known message
+///    string (which is the only capability that Serde's error traits require; they can't be
 ///    constructed with arbitrary payloads).
 ///
-/// This type is designed to facilitate this pattern, generally as part of a
-/// newtype struct that implements a specific Serde trait.
+/// This type is designed to facilitate this pattern, generally as part of a newtype struct that
+/// implements a specific Serde trait.
 struct State<P, E> {
-	// NOTE: Only `Forwarder` actually requires interior mutability for its
-	// state (due to `serialize` taking `&self`). However, giving `Forwarder` an
-	// individual `Cell` for its full state has a 15% - 25% impact on
-	// translation performance for formats that aren't expensive to encode or
-	// decode (like MessagePack). As of this writing, I can only guess at the
-	// possible optimizations and/or CPU microarchitectural effects that may be
-	// at play, since I haven't found a good way to understand this in depth.
+	// Only Forwarder actually needs interior mutability for its state (due to `serialize` taking
+	// `&self`). However, putting Forwarder's full state in a `Cell` has a 15% - 25% impact on
+	// translation performance for formats that aren't expensive to encode or decode (like
+	// MessagePack). I can only guess at the possible optimizations and/or CPU microarchitectural
+	// effects that could be at play, since I haven't found a good way to understand this in depth.
 	//
-	// Serde traits are still implemented on `&mut` references where possible to
-	// help mark where mutation is happening, even though `&` references would
-	// technically work.
+	// Serde traits are implemented on `&mut` references where possible to help mark where mutation
+	// is happening, even though `&` would technically work.
 	parent: Cell<Option<P>>,
 	error: Cell<Option<E>>,
 	source: Cell<ErrorSource>,
@@ -182,9 +162,8 @@ impl<P, E> State<P, E> {
 		State {
 			parent: Cell::new(Some(parent)),
 			error: Cell::new(None),
-			// Errors are assumed to come from the deserializer by default.
-			// Since the transcoder drives the serializer, it will always know
-			// when it needs to overwrite this.
+			// Errors are assumed to come from the deserializer by default. Since the transcoder
+			// drives the serializer, it always knows when it needs to overwrite this.
 			source: Cell::new(ErrorSource::De),
 		}
 	}
@@ -201,22 +180,20 @@ impl<P, E> State<P, E> {
 			.expect("parent already taken from this state")
 	}
 
-	/// Captures an error for later extraction, and records the provided source
-	/// (serializer or deserializer) as the source of the error.
+	/// Captures an error for later extraction, and records the provided source (serializer or
+	/// deserializer) as the source of the error.
 	fn capture_error(&self, source: ErrorSource, error: E) {
 		self.source.set(source);
 		self.error.set(Some(error));
 	}
 
-	/// Consumes and captures both the error value and error source from another
-	/// state.
+	/// Consumes and captures both the error value and error source from another state.
 	fn capture_child_error<C>(&self, child: State<C, E>) {
 		self.source.set(child.error_source());
 		self.error.set(child.into_error());
 	}
 
-	/// Returns the source (serializer or deserializer) of any error associated
-	/// with this state.
+	/// Returns the source (serializer or deserializer) of any error associated with this state.
 	fn error_source(&self) -> ErrorSource {
 		self.source.get()
 	}
@@ -227,12 +204,10 @@ impl<P, E> State<P, E> {
 	}
 }
 
-/// Takes the next value produced by a [`Deserializer`] and forwards it to a
-/// [`Serializer`].
+/// Takes the next value produced by a [`Deserializer`] and forwards it to a [`Serializer`].
 ///
-/// The deserializer's [`Deserializer::deserialize_any`] will drive the
-/// transcoding process by calling the [`de::Visitor`] method corresponding to
-/// the type of value it sees in its input.
+/// The deserializer's [`Deserializer::deserialize_any`] drives the transcoding process by calling
+/// the [`de::Visitor`] method corresponding to the type of value it sees in the input.
 struct Visitor<S: Serializer>(State<S, S::Error>);
 
 impl<S: Serializer> Visitor<S> {
@@ -240,11 +215,10 @@ impl<S: Serializer> Visitor<S> {
 		Visitor(State::new(ser))
 	}
 
-	/// Provides the error capturing and mapping boilerplate for all visitor
-	/// methods that handle basic scalar types (booleans, numbers, etc.), where
-	/// the only meaningful difference between methods is which [`Serializer`]
-	/// method they need to call. Having this in a function (rather than inlined
-	/// into a macro body) makes it easier for rust-analyzer et al to inspect.
+	/// Provides the error capturing and mapping boilerplate for all visitor methods that handle
+	/// basic scalar types (booleans, numbers, etc.), where the only meaningful difference between
+	/// methods is which [`Serializer`] method they need to call. Having this in a function (rather
+	/// than inlined into a macro body) makes it easier for rust-analyzer to inspect.
 	fn forward_scalar<F, E>(&mut self, use_serializer: F) -> Result<S::Ok, E>
 	where
 		F: FnOnce(S) -> Result<S::Ok, S::Error>,
@@ -261,12 +235,8 @@ impl<S: Serializer> Visitor<S> {
 	}
 }
 
-/// Implements [`de::Visitor`] methods that simply forward scalar values to the
-/// appropriate [`Serializer`] method.
-///
-/// As these methods in the transcoder's visitor have nearly identical
-/// implementations, this eliminates a significant amount of signature-related
-/// boilerplate and makes it easier to focus on the actual mappings.
+/// Implements [`de::Visitor`] methods that simply forward scalar values to the appropriate
+/// [`Serializer`] method.
 macro_rules! xt_transcode_impl_scalar_visitors {
 	($($name:ident($($arg:ident: $ty:ty)?) => $op:expr;)*) => {
 		$(fn $name<E: ::serde::de::Error>(self, $($arg: $ty)?) -> ::std::result::Result<Self::Value, E> {
@@ -276,27 +246,21 @@ macro_rules! xt_transcode_impl_scalar_visitors {
 }
 
 impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
-	// It's important to note that we don't implement error preservation by
-	// having the visitor return `Result<S::Ok, S::Error>`, which might seem at
-	// first like the obvious way to do things. That approach requires one of
-	// two things to happen when the transcoder encounters a serializer error in
-	// the middle of a complex value (sequence or map), neither of which is
-	// ideal:
+	// It's important to note that we don't implement error preservation by having the visitor
+	// return `Result<S::Ok, S::Error>`, which might seem at first like the obvious way to do
+	// things. That approach requires one of two things to happen when the transcoder encounters a
+	// serializer error in the middle of a collection (sequence or map), neither of which is ideal:
 	//
-	// 1. The visitor can try to return the `Result` immediately, without having
-	//    visited the entire map or sequence. My past experience is that this
-	//    could violate some deserializers' internal invariants and trigger
-	//    panics. Perhaps that's a bug in the deserializer; either way it
-	//    doesn't seem worth the risk.
+	// 1. The visitor can try to return the `Result` immediately, without having visited the entire
+	//    collection. My experience is that some deserializers panic while unwinding this way.
+	//    Maybe that's a bug in the deserializer; it's still not worth the risk.
 	//
-	// 2. To avoid the panics described in point 1, the visitor can "drain" the
-	//    rest of a map or sequence from the deserializer before it returns the
-	//    final `Result`, e.g. by deserializing into `IgnoredAny`. This works,
-	//    but wastes a lot of effort for an operation that we know will fail.
+	// 2. To avoid the panics described in point 1, the visitor can "drain" the rest of the
+	//    collection before it returns the final `Result`, e.g. by deserializing into `IgnoredAny`.
+	//    This works, but wastes a lot of effort for an operation that we know will fail.
 	//
-	// Unlike the `Result` approach, the error capturing and mapping approach
-	// ensures that a failed transcode follows the expected paths for error
-	// handling in both the serializer and deserializer.
+	// Unlike the `Result` approach, the error capturing and mapping approach ensures that a failed
+	// transcode follows normal error handling paths in both the serializer and deserializer.
 	type Value = S::Ok;
 
 	fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -395,15 +359,14 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 	}
 }
 
-/// A serializable "value" that actually serializes the next value produced by a
-/// [`Deserializer`].
+/// A serializable "value" that actually serializes the next value produced by a [`Deserializer`].
 ///
-/// This is required to transcode the individual elements of complex types like
-/// sequences and maps, as the serializer traits responsible for these types can
-/// only accept values implementing [`Serialize`].
+/// This is required to transcode the individual elements of collections like sequences and maps,
+/// as the serializer traits responsible for these types can only accept values implementing
+/// [`Serialize`].
 ///
-/// Unlike most serializable types, a `Forwarder` can only be serialized once,
-/// and will panic if serialized more than once.
+/// Unlike most serializable types, a `Forwarder` can only be serialized once, and panics if
+/// serialized more than once.
 struct Forwarder<'de, D: Deserializer<'de>>(State<D, D::Error>);
 
 impl<'de, D: Deserializer<'de>> Forwarder<'de, D> {
@@ -411,9 +374,8 @@ impl<'de, D: Deserializer<'de>> Forwarder<'de, D> {
 		Forwarder(State::new(de))
 	}
 
-	/// Provides the error capturing and mapping boilerplate for a single
-	/// element of a complex type (sequence or map), which is associated with a
-	/// particular Serde trait and collection-specific methods (e.g. to
+	/// Provides the error capturing and mapping boilerplate for a single element of a collection,
+	/// which is associated with a particular Serde trait and collection-specific methods (e.g. to
 	/// distinguish map keys and values).
 	fn serialize_with_seed<S, SErr, F>(
 		self,
@@ -424,8 +386,8 @@ impl<'de, D: Deserializer<'de>> Forwarder<'de, D> {
 		F: FnOnce(S, &Self) -> Result<(), SErr>,
 	{
 		let ser = seed_state.take_parent();
-		// NOTE: &self has interior mutability, so serialization may capture an
-		// error and source into the state at self.0.
+		// &self has interior mutability, so serialization may capture an error and source into
+		// the state at self.0.
 		match use_serializer(ser, &self) {
 			Ok(()) => Ok(()),
 			Err(ser_err) => {
@@ -456,8 +418,8 @@ impl<'de, D: Deserializer<'de>> Serialize for Forwarder<'de, D> {
 	}
 }
 
-/// Receives the next value of a sequence (from [`de::SeqAccess`]) and forwards
-/// it to a sequence serializer (through [`ser::SerializeSeq`]).
+/// Receives the next value of a sequence (from [`de::SeqAccess`]) and forwards it to a sequence
+/// serializer (through [`ser::SerializeSeq`]).
 struct SeqSeed<'ser, S: SerializeSeq>(State<&'ser mut S, S::Error>);
 
 impl<'ser, S: SerializeSeq> SeqSeed<'ser, S> {
@@ -475,8 +437,8 @@ impl<'de, S: SerializeSeq> DeserializeSeed<'de> for &mut SeqSeed<'_, S> {
 	}
 }
 
-/// Receives a map key (from [`de::MapAccess`]) and forwards it to a map
-/// serializer (through [`ser::SerializeMap`]).
+/// Receives a map key (from [`de::MapAccess`]) and forwards it to a map serializer
+/// (through [`ser::SerializeMap`]).
 struct KeySeed<'ser, S: SerializeMap>(State<&'ser mut S, S::Error>);
 
 impl<'ser, S: SerializeMap> KeySeed<'ser, S> {
@@ -493,8 +455,8 @@ impl<'de, S: SerializeMap> DeserializeSeed<'de> for &mut KeySeed<'_, S> {
 	}
 }
 
-/// Receives a map value (from [`de::MapAccess`]) and forwards it to a map
-/// serializer (through [`ser::SerializeMap`]).
+/// Receives a map value (from [`de::MapAccess`]) and forwards it to a map serializer
+/// (through [`ser::SerializeMap`]).
 struct ValueSeed<'ser, S: SerializeMap>(State<&'ser mut S, S::Error>);
 
 impl<'ser, S: SerializeMap> ValueSeed<'ser, S> {

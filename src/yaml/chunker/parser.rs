@@ -1,9 +1,8 @@
 //! A minimal safe abstraction over the venerable [libyaml].
 //!
-//! [`Parser`] reads a UTF-8 encoded YAML stream and exposes [`Event`]s that
-//! indicate the start and end positions of various document features. It's
-//! based on a pure-Rust translation of the common [libyaml] library, and
-//! largely exposes that library's types and values when it's safe to do so.
+//! [`Parser`] reads a UTF-8 encoded YAML stream and exposes [`Event`]s that indicate the start and
+//! end positions of various document features. It's based on a pure-Rust translation of the common
+//! [libyaml] library, and largely exposes that library's types and values when it's safe to do so.
 //!
 //! [libyaml]: https://pyyaml.org/wiki/LibYAML
 
@@ -44,9 +43,9 @@ where
 	R: Read,
 {
 	pub(super) fn new(reader: R) -> Parser<R> {
-		// SAFETY: This comes from libyaml, which we assume is implemented
-		// correctly. We expect initialization functions to properly handle
-		// uninitialized memory; empirical tests in Miri show this to be true.
+		// SAFETY: This comes from libyaml, which we assume is implemented correctly. We expect
+		// initialization functions to properly handle uninitialized memory; empirical tests in
+		// Miri show this to be true.
 		let mut parser = unsafe {
 			let mut uninit = Box::new_uninit();
 			if yaml_parser_initialize(uninit.as_mut_ptr()).fail {
@@ -55,22 +54,20 @@ where
 			uninit.assume_init()
 		};
 
-		// libyaml needs a raw ReadState<R> pointer for Self::read_handler.
-		// Since mutable access through a Box invalidates derived pointers,
-		// we can't simultaneously keep this as a Box in Parser and allow
-		// reader_mut() to expose the underlying reader. reader_mut() is a
-		// must-have, so we solve the aliasing concern by keeping this raw for
-		// its entire life. new() should no longer panic after this point,
-		// so this should never leak before we finish constructing the Parser
-		// and activate its Drop impl.
+		// libyaml needs a raw ReadState<R> pointer for Self::read_handler. Since mutable access
+		// through a Box invalidates derived pointers, we can't simultaneously keep this as a Box
+		// in Parser and allow reader_mut() to expose the underlying reader. reader_mut() is a
+		// must-have, so we solve the aliasing concern by keeping this raw for its entire life.
+		// new() should no longer panic after this point, so this should never leak before we
+		// finish constructing the Parser and activate its Drop impl.
 		let read_state = Box::into_raw(Box::new(ReadState {
 			reader,
 			bouncer: vec![],
 			error: None,
 		}));
 
-		// SAFETY: Again, we assume libyaml is implemented correctly. We know
-		// the parser is initialized because we didn't panic above.
+		// SAFETY: Again, we assume libyaml is implemented correctly. We know the parser is
+		// initialized because we didn't panic above.
 		unsafe {
 			yaml_parser_set_encoding(&mut *parser, YAML_UTF8_ENCODING);
 			yaml_parser_set_input(
@@ -84,12 +81,11 @@ where
 	}
 
 	fn read_state_mut(&mut self) -> &mut ReadState<R> {
-		// SAFETY: The only other dereference of self.read_state outside of Drop
-		// is in read_handler, when we pull it out of libyaml's data pointer.
-		// Assuming libyaml is single-threaded and we have no other aliasing
-		// bugs, our &mut self guarantees that nobody is running the parser
-		// (and, by extension, read_handler). The output lifetime is bounded by
-		// self, so nobody _can_ run the parser while it remains live.
+		// SAFETY: The only other dereference of self.read_state outside of Drop is in
+		// read_handler, when we pull it out of libyaml's data pointer. Assuming libyaml is
+		// single-threaded and we have no other aliasing bugs, our &mut self guarantees that nobody
+		// is running the parser (and, by extension, read_handler). The output lifetime is bounded
+		// by self, so nobody _can_ run the parser while it remains live.
 		unsafe { &mut *self.read_state }
 	}
 
@@ -110,8 +106,8 @@ where
 	///
 	/// # Safety
 	///
-	/// The data pointer provided to `yaml_parser_set_input` must be a valid
-	/// `ReadState<R>` pointer.
+	/// The data pointer provided to `yaml_parser_set_input` must be a valid `ReadState<R>`
+	/// pointer.
 	unsafe fn read_handler(
 		read_state: *mut c_void,
 		buffer: *mut u8,
@@ -121,9 +117,9 @@ where
 		const READ_SUCCESS: i32 = 1;
 		const READ_FAILURE: i32 = 0;
 
-		// These should never fail, but let's be extra safe. Ideally we would
-		// panic in cases as degenerate as this, but I want to model a scenario
-		// where we're using the true libyaml through FFI and can't unwind.
+		// These should never fail, but let's be extra safe. Ideally we'd panic in cases this
+		// degenerate, but I want to model a scenario where we're using the true libyaml through
+		// FFI and can't unwind.
 		if read_state.is_null() || buffer.is_null() || size_read.is_null() {
 			return READ_FAILURE;
 		}
@@ -131,43 +127,40 @@ where
 			return READ_FAILURE;
 		};
 
-		// SAFETY: self.read_state_mut() is the only other dereference of the
-		// read_state; see its comment explaining how it's mutually exclusive
-		// with running the parser. The lifetime here lasts through the end of
-		// this function, i.e. before the parser is finished.
+		// SAFETY: self.read_state_mut() is the only other dereference of the read_state; see its
+		// comment explaining how it's mutually exclusive with running the parser. The lifetime
+		// here lasts through the end of this function, i.e. before the parser is finished.
 		let read_state = unsafe { &mut *read_state.cast::<ReadState<R>>() };
 
-		// libyaml is not guaranteed to initialize its buffer prior to the first
-		// read. It would be instant Undefined Behavior to slice that buffer,
-		// and unsound to expose it to a safe Read impl, so we need to bounce
-		// reads through a buffer we control.
+		// libyaml is not guaranteed to initialize its buffer prior to the first read. It would be
+		// instant Undefined Behavior to slice that buffer, and unsound to expose it to a safe Read
+		// impl, so we need to bounce reads through a buffer we control.
 		read_state.bouncer.resize(buffer_size, 0);
 
 		match read_state.reader.read(&mut read_state.bouncer[..]) {
 			Ok(read_len) if read_len <= buffer_size => {
-				// SAFETY: copy_nonoverlapping is VERY dangerous, so let's walk
-				// through its 4 requirements:
+				// SAFETY: copy_nonoverlapping is VERY dangerous, so let's walk through its 4
+				// requirements:
 				//
-				// 1. read_state.bouncer.as_ptr() must be valid for reads of
-				//    read_len bytes. We resize that to buffer_size above, and
-				//    our match guard guarantees read_len <= buffer_size, so
-				//    we're good.
+				// 1. read_state.bouncer.as_ptr() must be valid for reads of read_len bytes.
+				//    We resize that to buffer_size above, and our match guard guarantees
+				//    read_len <= buffer_size.
 				//
-				// 2. buffer must be valid for writes of read_len bytes. We know
-				//    read_len <= buffer_size, and otherwise trust libyaml to
-				//    pass us valid arguments.
+				// 2. buffer must be valid for writes of read_len bytes.
+				//    We know read_len <= buffer_size, and otherwise trust libyaml to pass
+				//    valid arguments.
 				//
-				// 3. Both pointers must be aligned. They're u8 pointers, so are
-				//    inherently aligned because "the size of a value is always
-				//    a multiple of its alignment" (The Rust Reference § 10.3).
+				// 3. Both pointers must be aligned. They're u8 pointers, so are inherently aligned
+				//    because "the size of a value is always a multiple of its alignment"
+				//    (The Rust Reference § 10.3), and 1 is only a multiple of 1 as far as data
+				//    sizes in computer memory go. (Can you tell how serious I am about this?)
 				//
-				// 4. The memory regions can't overlap. We control the
-				//    bounce buffer, so the only way libyaml's can overlap is if
-				//    the global allocator is truly busted.
+				// 4. The memory regions can't overlap. We control the bounce buffer, so libyaml's
+				//    can only overlap if the global allocator is badly broken.
 				//
-				// As far as the *size_read write, we're again trusting libyaml
-				// to pass valid arguments. Note that libyaml's EOF condition is
-				// the same as Rust's: report a successful 0 byte read.
+				// As far as writing to size_read, we're again trusting libyaml to pass valid
+				// arguments. Note that libyaml's EOF condition is the same as Rust's: report a
+				// successful 0 byte read.
 				unsafe {
 					ptr::copy_nonoverlapping(read_state.bouncer.as_ptr(), buffer, read_len);
 					*size_read = read_len as u64;
@@ -192,11 +185,10 @@ where
 	R: Read,
 {
 	fn drop(&mut self) {
-		// SAFETY: Parser::new panics if libyaml fails to initialize the parser,
-		// so we know it's logically valid here. self.read_state originally came
-		// from a Box, so is safe to deallocate that way. We logically destroy
-		// the parser before the read state, so it should have no chance to
-		// access freed read state memory.
+		// SAFETY: Parser::new panics if libyaml fails to initialize the parser, so we know it's
+		// logically valid here. self.read_state originally came from a Box, so is safe to
+		// deallocate that way. We logically destroy the parser before the read state, so it should
+		// have no chance to access freed read state memory.
 		unsafe {
 			yaml_parser_delete(&mut *self.parser);
 			drop(Box::from_raw(self.read_state));
@@ -209,9 +201,9 @@ pub(super) struct Event(yaml_event_t);
 impl Event {
 	fn parse_next(parser: &mut yaml_parser_t) -> Result<Event, ParserError> {
 		let mut event = MaybeUninit::uninit();
-		// SAFETY: We assume yaml_parser_parse is implemented correctly, and
-		// logically initializes the event when it succeeds. If it fails, we
-		// simply drop the MaybeUninit when we return the error.
+		// SAFETY: We assume yaml_parser_parse is implemented correctly, and logically initializes
+		// the event when it succeeds. If it fails, the C struct inside the MaybeUninit shouldn't
+		// reference anything we need to drop or destroy manually.
 		unsafe {
 			if yaml_parser_parse(parser, event.as_mut_ptr()).ok {
 				Ok(Event(event.assume_init()))
@@ -236,8 +228,8 @@ impl Event {
 
 impl Drop for Event {
 	fn drop(&mut self) {
-		// SAFETY: Event::parse_next returns an error if libyaml fails to
-		// initialize the event, so we know it's logically valid here.
+		// SAFETY: Event::parse_next returns an error if libyaml fails to initialize the event,
+		// so we know it's logically valid here.
 		unsafe {
 			yaml_event_delete(&mut self.0);
 		};
@@ -253,15 +245,13 @@ struct ParserError {
 impl ParserError {
 	fn new(parser: &mut yaml_parser_t) -> Self {
 		let (problem, context);
-		// SAFETY: We assume libyaml is implemented correctly with respect to
-		// these being either null pointers or valid C strings. The null pointer
-		// checks aren't out of caution; at least one of these may legitimately
-		// be null under normal operation.
+		// SAFETY: We assume libyaml is implemented correctly with respect to these being either
+		// null pointers or valid C strings. The null pointer checks aren't out of caution;
+		// at least one of these may legitimately be null under normal operation.
 		unsafe {
-			// unsafe_libyaml makes these *const i8 on every target, rather than
-			// dynamically using the correct signedness like `c_char` does.
-			// Without the casts working around that, builds for Linux on Arm
-			// targets (and others) will fail.
+			// unsafe_libyaml makes these *const i8 on every target, rather than dynamically using
+			// the correct signedness like `c_char` does. Without the casts working around that,
+			// builds for Linux on Arm targets (and others) will fail.
 			problem = Self::try_cstr_into_string(parser.problem.cast::<c_char>());
 			context = Self::try_cstr_into_string(parser.context.cast::<c_char>());
 		}
@@ -279,8 +269,8 @@ impl ParserError {
 		}
 	}
 
-	/// Try to convert a C string into a [`String`], lossily replacing invalid
-	/// UTF-8 sequences, or return [`None`] if `ptr` is null.
+	/// Try to convert a C string into a [`String`], lossily replacing invalid UTF-8 sequences,
+	/// or return [`None`] if `ptr` is null.
 	///
 	/// # Safety
 	///

@@ -2,9 +2,8 @@
 //!
 //! **xt is pre-1.0 software with an unstable library API!**
 //!
-//! To convert between serialized data formats in Rust code, consider the
-//! mature, stable, and widely-used [`serde_transcode`][serde-transcode] crate
-//! instead.
+//! To convert between serialized data formats in Rust code, consider the mature, stable,
+//! and widely-used [`serde_transcode`][serde-transcode] crate instead.
 //!
 //! [serde-transcode]: https://docs.rs/serde-transcode
 
@@ -74,16 +73,14 @@ where
 
 /// Translates multiple inputs to a single serialized output.
 ///
-/// A `Translator` accepts both slice and reader input. See [`translate_slice`]
-/// and [`translate_reader`] for considerations associated with each kind of
-/// source.
+/// A `Translator` accepts both slice and reader input. See [`translate_slice`] and
+/// [`translate_reader`] for considerations associated with each kind of source.
 ///
-/// When a `Translator` is used more than once to translate different inputs, it
-/// outputs the logical concatenation of all documents from all inputs as if
-/// they had been presented in a single input. When translating to a format
-/// without multi-document support, translation will fail if the translator
-/// encounters more than one document in the first input, or if the translator
-/// is called a second time with another input.
+/// When a `Translator` is used more than once to translate different inputs, it outputs the
+/// logical concatenation of all documents from all inputs as if they had been presented in a
+/// single input. When translating to a format without multi-document support, translation fails if
+/// the translator encounters more than one document in the first input, or if the translator is
+/// called a second time with another input.
 pub struct Translator<W>(Dispatcher<W>)
 where
 	W: Write;
@@ -99,30 +96,25 @@ where
 
 	/// Translates the contents of a single input slice to a different format.
 	///
-	/// Slice inputs are typically more efficient to translate than reader
-	/// inputs, but require all input to be available in memory in advance. For
-	/// unbounded streams like standard input or non-regular files, consider
-	/// using [`translate_reader`] rather than reading the entire stream into
-	/// memory manually.
+	/// Slices are typically more efficient to translate than readers, but require all input to be
+	/// available in memory. For unbounded streams like standard input or non-regular files,
+	/// consider [`translate_reader`] rather than manually buffering the entire reader.
 	///
-	/// When `from` is `None`, xt will attempt to detect the input format from
-	/// the input itself.
+	/// When `from` is `None`, the translator attempts to detect the format from the input itself.
 	pub fn translate_slice(&mut self, input: &[u8], from: Option<Format>) -> Result<()> {
 		self.translate(input::Handle::from_slice(input), from)
 	}
 
 	/// Translates the contents of a single reader to a different format.
 	///
-	/// Reader inputs enable streaming translation for most formats, allowing xt
-	/// to translate documents as they appear in the stream without buffering
-	/// more than one document in memory at a time. When translating from a
-	/// format that does not support streaming, xt will automatically read the
-	/// entire input into memory before starting translation.
+	/// Reader inputs enable streaming translation for most formats, where the translator handles
+	/// multiple documents without buffering more than one in memory at a time. When translating
+	/// from a format without streaming support, the translator automatically buffers the entire
+	/// input.
 	///
-	/// When `from` is `None`, xt will attempt to detect the input format from
-	/// the input itself. The current format detection implementation does this
-	/// by fully reading the contents of a single document into memory before
-	/// starting translation.
+	/// When `from` is `None`, the translator attempts to detect the format from the input itself.
+	/// The current implementation must buffer at least one full document to perform the detection
+	/// before starting translation.
 	pub fn translate_reader<R>(&mut self, input: R, from: Option<Format>) -> Result<()>
 	where
 		R: Read,
@@ -233,10 +225,9 @@ where
 
 /// The set of input and output formats supported by xt.
 ///
-/// Support for each format comes largely from external crates, with some
-/// additional preprocessing by xt for select formats. The crate selection for
-/// each format is **not stable**, and is documented for informational purposes
-/// only.
+/// Support for each format comes largely from external crates, with some additional preprocessing
+/// by xt for select formats. The crate selection for each format is **not stable**,
+/// and is documented for informational purposes only.
 #[derive(Copy, Clone)]
 #[non_exhaustive]
 pub enum Format {
@@ -254,8 +245,8 @@ pub enum Format {
 	Msgpack,
 	/// The [TOML][toml] format as interpreted by [`toml`][::toml].
 	///
-	/// This format supports single-document translation only, and as such does
-	/// not support streaming input.
+	/// This format supports single-document translation only,
+	/// and as such does not support streaming input.
 	///
 	/// [toml]: https://github.com/toml-lang/toml
 	Toml,
@@ -279,33 +270,30 @@ impl fmt::Display for Format {
 }
 
 impl Format {
-	/// Detects the input format by trying each known format and selecting the first
-	/// one that works.
+	/// Detects the input format by trying to parse a single document with each one.
 	fn detect(input: &mut input::Handle) -> io::Result<Option<Format>> {
-		// As a binary format, we expect MessagePack to be more restrictive than any
-		// text format. Detection of MessagePack inputs is limited to collection
-		// types; see comments in the implementation for details.
+		// As a binary format, we expect MessagePack to be more restrictive than any text format.
+		// Detection of MessagePack inputs is limited to collection types; see comments in the
+		// implementation for details.
 		if crate::msgpack::input_matches(input.borrow_mut())? {
 			return Ok(Some(Format::Msgpack));
 		}
 
-		// We expect JSON to be more restrictive than other text formats. For
-		// example, a "#" comment at the start of a document could be TOML or YAML,
-		// but definitely not JSON.
+		// We expect JSON to be more restrictive than other text formats. For example, a "#"
+		// comment at the start of a document could be TOML or YAML, but definitely not JSON.
 		if crate::json::input_matches(input.borrow_mut())? {
 			return Ok(Some(Format::Json));
 		}
 
-		// YAML is actually less restrictive than TOML, but we want to try it first
-		// since it supports streaming input (which means that detection may require
-		// less buffering). Detection of YAML inputs is limited to collection types;
-		// see comments in the implementation for details.
+		// YAML is _less_ restrictive than TOML, but we want to try it first since it supports
+		// streaming input (so detection may require less buffering). Detection of YAML inputs is
+		// limited to collection types; see comments in the implementation for details.
 		if crate::yaml::input_matches(input.borrow_mut())? {
 			return Ok(Some(Format::Yaml));
 		}
 
-		// Finally, TOML is the only input format that must fully buffer input
-		// before parsing.
+		// TOML is the only format that must fully buffer its input, and imposes its own limits to
+		// avoid unbounded memory consumption.
 		if crate::toml::input_matches(input.borrow_mut())? {
 			return Ok(Some(Format::Toml));
 		}

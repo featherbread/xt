@@ -1,16 +1,13 @@
 //! Support for splitting YAML 1.2 streams into their constituent documents.
 //!
-//! This is an awful hack to provide some level of streaming input support atop
-//! `serde_yaml`, which as of writing must buffer all input before parsing it
-//! (the convenience methods that parse from readers simply buffer for you).
-//! [`Chunker`] secretly copies the raw YAML stream produced by the original
-//! reader, and chunks it up based on the start and end byte offsets of the
-//! documents seen by a parser. Passing those chunks to `serde_yaml` for a
-//! second pass should yield the same result as parsing the entire original
-//! stream.
+//! This is an awful hack to provide some level of streaming input support atop [`serde_yaml`],
+//! which as of writing must buffer all input before parsing it (the convenience methods that parse
+//! from readers secretly buffer for you). [`Chunker`] snoops on the reader's bytes as the
+//! underlying parser from `serde_yaml` processes them, and chunks them up based on document start
+//! and end offsets from the parser's event stream. Passing those chunks to `serde_yaml` for a
+//! second pass should yield the same result as parsing the entire original stream.
 //!
-//! I would love to have the time and energy someday to implement a true
-//! streaming YAML parser, whatever that looks like.
+//! I'd love to have the time and energy someday to implement something more proper.
 
 use std::io::{self, Read};
 use std::mem;
@@ -39,10 +36,9 @@ where
 {
 	/// Creates a new chunker for the YAML stream produced by the reader.
 	///
-	/// YAML 1.2 allows several different text encodings for YAML streams, as
-	/// well as the presence of byte order marks at the start of the stream or
-	/// individual documents. However, `Chunker` requires a UTF-8 stream without
-	/// BOMs. Consider using the [`encoding`](super::encoding) module to
+	/// YAML 1.2 allows several different text encodings for YAML streams, as well as byte order
+	/// marks at the start of the stream or individual documents. However, `Chunker` requires a
+	/// UTF-8 stream without BOMs. Consider using the [`encoding`](super::encoding) module to
 	/// re-encode non-UTF-8 streams.
 	pub(super) fn new(reader: R) -> Self {
 		Self {
@@ -71,12 +67,11 @@ where
 				Err(err) => return Some(Err(io::Error::new(io::ErrorKind::InvalidData, err))),
 			};
 
-			// Note that while we chunk on DOCUMENT_END events, we don't emit
-			// the chunk until the next DOCUMENT_START or STREAM_END. The parser
-			// sometimes sees valid documents in non-YAML inputs, and only fails
-			// when it looks for the start of the next document. This is bad
-			// when the chunker's output determines whether an arbitrary input
-			// is valid YAML (e.g. xt's format detection).
+			// Note that while we chunk on DOCUMENT_END events, we don't emit the chunk until the
+			// next DOCUMENT_START or STREAM_END. The parser sometimes sees valid documents in
+			// non-YAML inputs, and only fails when it looks for the start of the next document.
+			// This is bad when the chunker's output determines whether an arbitrary input is valid
+			// YAML (e.g. xt's format detection).
 			match event.event_type() {
 				YAML_DOCUMENT_START_EVENT => {
 					let offset = event.start_offset();
@@ -129,8 +124,7 @@ impl Document {
 		&self.content
 	}
 
-	/// Returns true if the content of the document is a collection (sequence or
-	/// mapping).
+	/// Returns true if the content of the document is a collection (sequence or mapping).
 	pub(super) fn is_collection(&self) -> bool {
 		matches!(self.kind, Some(DocumentKind::Collection))
 	}
@@ -158,16 +152,16 @@ where
 		}
 	}
 
-	/// Trims from the start of the capture buffer so the next chunk will begin
-	/// at the specified reader offset.
+	/// Trims from the start of the capture buffer so the next chunk will begin at the specified
+	/// reader offset.
 	fn trim_to_offset(&mut self, offset: u64) {
 		let trim_len = usize::try_from(offset - self.captured_start_offset).unwrap();
 		self.captured_start_offset = offset;
 		self.captured.drain(..trim_len);
 	}
 
-	/// Takes the chunk from the start of the capture buffer up to the specified
-	/// reader offset, leaving bytes beyond the offset in the capture buffer.
+	/// Takes the chunk from the start of the capture buffer up to the specified reader offset,
+	/// leaving bytes beyond the offset in the capture buffer.
 	fn take_to_offset(&mut self, offset: u64) -> Vec<u8> {
 		let take_len = usize::try_from(offset - self.captured_start_offset).unwrap();
 		let tail = self.captured.split_off(take_len);
@@ -181,11 +175,10 @@ where
 	R: Read,
 {
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-		// While the read documentation recommends against reading from buf, it
-		// does not prevent it, and does require callers of read to assume we
-		// might do this. As consolation, note that we only read back bytes that
-		// we know were freshly written, unless of course the source is broken
-		// and lies about how many bytes it read.
+		// The `read` docs recommend against us reading from `buf`, but also require callers to
+		// assume we might do this. Letting our consumer drive the frequency and size of source
+		// reads makes our presence more transparent to both sides. We try to be good citizens by
+		// only reading the parts of `buf` the source tells us were freshly written.
 		let len = self.reader.read(buf)?;
 		self.captured.extend_from_slice(&buf[..len]);
 		Ok(len)
@@ -223,9 +216,8 @@ test: true
 		assert_eq!(&collections, &[true, false, true]);
 	}
 
-	// Tests that a YAML document consisting solely of an unknown anchor doesn't
-	// crash the chunker. Fuzzing revealed this bug (via this exact input) in a
-	// previous implementation.
+	// Tests that a YAML document consisting solely of an unknown anchor doesn't crash the chunker.
+	// Fuzzing revealed this bug (via this exact input) in a previous implementation.
 	#[test]
 	fn chunker_unknown_anchor() {
 		const INPUT: &str = "*y";
@@ -240,9 +232,8 @@ test: true
 		let _ = chunker.collect::<Vec<_>>();
 	}
 
-	/// A reader that always reports having read 1 byte more than the length of
-	/// the buffer provided to [`read`](Read::read), regardless of the actual
-	/// size of the underlying read.
+	/// A reader that always reports having read 1 byte more than the length of the buffer provided
+	/// to [`read`](Read::read), regardless of the actual size of the underlying read.
 	struct MisbehavingReader<R: Read>(R);
 
 	impl<R: Read> Read for MisbehavingReader<R> {

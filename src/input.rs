@@ -1,54 +1,44 @@
 //! Generic support for input from both slice and reader sources.
 //!
-//! This module provides the abstractions that enable xt to dynamically select
-//! the most functional and efficient translation strategy for any given input
-//! regardless of how the tool is invoked. Several factors have influenced its
-//! design:
+//! This module helps xt dynamically choose the most functional and efficient translation strategy
+//! for any given input source and format. Several factors have influenced its design:
 //!
-//! - To translate unbounded streams of input documents, we must be able to
-//!   provide a reader to the input format's deserializer.
+//! - To translate unbounded input streams, we must be able to provide a reader to the input
+//!   format's deserializer.
 //!
-//! - To support format detection based on parser trials without sacrificing
-//!   general reader support, we must be able to "rewind" a potentially
-//!   non-seekable input.
+//! - To support format detection based on parser trials without sacrificing general reader
+//!   support, we must be able to rewind a potentially non-seekable input.
 //!
-//! - However, the ability to rewind a reader should not impose any extra cost
-//!   in cases where format detection is unnecessary.
+//! - However, the ability to rewind a reader shouldn't impose extra costs when format detection is
+//!   unnecessary.
 //!
-//! - Even for input formats that support readers, it is almost always faster to
-//!   translate from an in-memory slice of the full input when one is readily
-//!   available.
+//! - Even for input formats that support readers, it's almost always faster to translate from an
+//!   in-memory slice of the full input when one is readily available.
 //!
-//! - Not all input formats can translate from a reader, and must consume their
-//!   input from an in-memory slice no matter what.
+//! - Not all input formats can translate from a reader, and must consume input from a slice no
+//!   matter what.
 //!
-//! The module accomplishes this by supporting both slice and reader inputs,
-//! exposing both possibilities to formats that can optimize for each one, and
-//! providing convenience methods for slice-only formats that automatically
-//! consume reader input as necessary.
+//! The module accounts for these factors by supporting both slice and reader inputs, exposing both
+//! possibilities to formats that can optimize for each one, and providing slice-only convenience
+//! methods for those that can't.
 //!
-//! For slice inputs, the module simply passes the borrowed slice directly to
-//! the format.
+//! For slice inputs, the module simply passes a borrowed slice directly to the format.
 //!
-//! For reader inputs, borrowing the input for format detection produces a
-//! special reader that captures all bytes consumed from the source, and that
-//! rewinds before each subsequent use to produce those bytes again before
-//! consuming more from the source. If a format happens to consume all of a
-//! source reader while borrowing it, all future use of the input will become
-//! slice-based. When the selected input format is ready to take ownership of
-//! the input, it can receive a byte buffer, a chain of the prefix and source
-//! readers, or the source reader alone if format detection was skipped.
+//! For reader inputs, borrowing the input for format detection yields a [`CaptureReader`] that
+//! transparently snoops on and replays the reader's earliest bytes as many times as necessary. If
+//! a format happens to consume all of a borrowed reader, all future use of the input becomes
+//! slice-based. Or, if format detection is skipped, taking ownership of the input yields the
+//! original reader with no wrapping beyond boxing as a trait object.
 
 use std::borrow::Cow;
 use std::io::{self, Cursor, Read, Write};
 
-/// A container for xt's input.
+/// A reusable container for xt's input.
 ///
-/// See the module documentation and [`Translator`](crate::Translator)
-/// documentation for more details.
+/// See [the module documentation](self) and [`Translator`](crate::Translator) for details.
 pub(crate) struct Handle<'i>(Source<'i>);
 
-/// The private container for the original input a [`Handle`] was created from.
+/// The private container for xt's original input source.
 enum Source<'i> {
 	Slice(&'i [u8]),
 	Reader(GuardedCaptureReader<Box<dyn Read + 'i>>),
@@ -70,15 +60,8 @@ impl<'i> Handle<'i> {
 
 	/// Borrows a temporary reference to the input.
 	///
-	/// For slice inputs, this provides access to the original slice.
-	///
-	/// For reader inputs that are fully buffered from previous use of the
-	/// handle, this provides access to the reader's full contents as a slice.
-	///
-	/// For reader inputs not yet fully buffered, this provides access to the
-	/// reader through a wrapper that captures its output. In subsequent calls
-	/// to `borrow_mut`, the wrapper will produce the captured bytes before
-	/// producing more bytes from the original reader.
+	/// For reader inputs, this may provide a [`CaptureReader`] or a slice depending on whether the
+	/// reader's input is fully consumed. See [the module documentation](self) for details.
 	pub(crate) fn borrow_mut(&mut self) -> Ref<'i, '_> {
 		match &mut self.0 {
 			Source::Slice(b) => Ref::Slice(b),
@@ -94,8 +77,8 @@ impl<'i> Handle<'i> {
 	}
 }
 
-/// Produces the original input as a slice, either by passing through the
-/// original slice or fully reading the original reader into a buffer.
+/// Produces the original input as a slice, either by passing through the original slice or
+/// consuming the original reader.
 impl<'i> TryFrom<Handle<'i>> for Cow<'i, [u8]> {
 	type Error = io::Error;
 
@@ -112,12 +95,10 @@ impl<'i> TryFrom<Handle<'i>> for Cow<'i, [u8]> {
 	}
 }
 
-/// A container for owned input obtained by consuming a [`Handle`].
+/// A non-reusable container for xt's input, to be consumed by the selected input format.
 ///
-/// The kind of `Input` produced from a `Handle` may not correspond directly to
-/// the original source. If a reader input was fully buffered through use of the
-/// `Handle`, the `Input` will provide ownership of the buffer, and the
-/// conversion from `Handle` will drop the reader.
+/// For reader inputs, this may provide a reader or a slice depending on whether the reader's input
+/// was fully consumed. See [the module documentation](self) for details.
 pub(crate) enum Input<'i> {
 	Slice(Cow<'i, [u8]>),
 	Reader(Box<dyn Read + 'i>),
@@ -143,9 +124,7 @@ impl<'i> From<Handle<'i>> for Input<'i> {
 	}
 }
 
-/// A temporary reference to input from a [`Handle`].
-///
-/// See [`Handle::borrow_mut`] for details.
+/// A temporary reference to xt's input created by [`Handle::borrow_mut`].
 pub(crate) enum Ref<'i, 'h>
 where
 	'i: 'h,
@@ -160,14 +139,13 @@ where
 {
 	/// Returns a prefix of the input.
 	///
-	/// For slice inputs and fully buffered reader inputs, this simply returns
-	/// the full input.
-	///
-	/// For reader inputs not yet fully buffered, `size_hint` represents the
-	/// minimum size of the prefix that the call should attempt to produce by
-	/// capturing new bytes from the source if necessary. The returned prefix
-	/// may be smaller or larger than `size_hint` if the reader reaches EOF or
+	/// For reader inputs not fully consumed, `size_hint` represents the minimum size of the prefix
+	/// that the call should try to produce by capturing new bytes from the source if necessary.
+	/// The returned prefix may be smaller or larger than `size_hint` if the reader reaches EOF or
 	/// more input is already captured.
+	///
+	/// For slice inputs and fully consumed reader inputs, this returns the full input regardless
+	/// of `size_hint`.
 	pub(crate) fn prefix(&mut self, size_hint: usize) -> io::Result<&[u8]> {
 		match self {
 			Ref::Slice(b) => Ok(b),
@@ -181,9 +159,8 @@ where
 
 /// A wrapper that drops a reader as soon as it first reaches EOF.
 ///
-/// When used as the first half of a [`Chain`](std::io::Chain), `FusedReader`
-/// cleans up the first reader's resources as soon as the chain moves on to the
-/// second reader, rather than when the `Chain` as a whole is dropped.
+/// As the first half of a [`Chain`](std::io::Chain), this cleans up the first reader's resources
+/// as soon as the chain moves to the second reader, rather than when the whole `Chain` is dropped.
 struct FusedReader<R>(Option<R>)
 where
 	R: Read;
@@ -213,10 +190,8 @@ where
 	}
 }
 
-/// A wrapper that forces a [`CaptureReader`] to be rewound prior to use.
-///
-/// This is designed to statically prevent bugs caused by forgetting to rewind
-/// the reader before exposing its contents to consumers.
+/// A wrapper that forces a [`CaptureReader`] to be rewound prior to use, which eliminates a class
+/// of bugs xt has had in the past.
 struct GuardedCaptureReader<R>(CaptureReader<R>)
 where
 	R: Read;
@@ -225,38 +200,28 @@ impl<R> GuardedCaptureReader<R>
 where
 	R: Read,
 {
-	/// Returns a new `GuardedCaptureReader` containing a new `CaptureReader`.
 	fn new(r: R) -> Self {
 		Self(CaptureReader::new(r))
 	}
 
-	/// Rewinds the `CaptureReader`, then returns a mutable reference.
 	fn rewind_and_borrow_mut(&mut self) -> &mut CaptureReader<R> {
 		self.0.rewind();
 		&mut self.0
 	}
 
-	/// Rewinds the `CaptureReader`, then returns it.
 	fn rewind_and_take(mut self) -> CaptureReader<R> {
 		self.0.rewind();
 		self.0
 	}
 }
 
-/// A wrapper that captures the output of a reader into a buffer as it is read.
+/// Captures and replays the output of an arbitrary non-seekable reader.
 ///
-/// A `CaptureReader` provides limited seeking capabilities for a non-seekable
-/// reader by storing a copy of the bytes it produces for each `read` call.
-/// After calling [`rewind`][CaptureReader::rewind], the `CaptureReader` will
-/// produce the stored bytes for new `read` calls before consuming more of the
-/// source, as if [`Seek::rewind`][std::io::Seek::rewind] had been used on the
-/// source (except that rewinding a `CaptureReader` is infallible).
+/// After calling [`rewind`](CaptureReader::rewind), a `CaptureReader` produces its captured bytes
+/// before consuming more of the source, analogous to [`Seek::rewind`](std::io::Seek::rewind).
 ///
-/// A `CaptureReader` also tracks when the source reports an "end of file"
-/// condition, indicating that the source is fully buffered as if
-/// [`read_to_end`][Read::read_to_end] had been used. Consuming the
-/// `CaptureReader` with [`into_inner`][CaptureReader::into_inner] permits
-/// access to the buffered bytes without additional copies.
+/// A `CaptureReader` also tracks end-of-file conditions from the source, so consumers can switch
+/// to fully buffered input, analogous to [`Read::read_to_end`].
 pub(crate) struct CaptureReader<R>
 where
 	R: Read,
@@ -270,7 +235,7 @@ impl<R> CaptureReader<R>
 where
 	R: Read,
 {
-	/// Creates a new reader that captures the bytes produced by `source`.
+	/// Creates a new reader that captures `source`.
 	fn new(source: R) -> Self {
 		Self {
 			prefix: Cursor::new(vec![]),
@@ -284,24 +249,24 @@ where
 		self.prefix.get_ref()
 	}
 
-	/// Returns the number of bytes remaining to read from the captured prefix
-	/// before consuming more from the source.
+	/// Returns the number of bytes remaining to read from the captured prefix before consuming
+	/// more from the source.
 	fn captured_unread_size(&self) -> usize {
-		// The cursor position is relative to an in-memory slice. This shouldn't
-		// truncate unless we manually give the cursor a ridiculous position.
+		// The cursor position is relative to an in-memory slice.
+		// This shouldn't truncate unless we manually give the cursor
+		// a ridiculous position.
 		#[allow(clippy::cast_possible_truncation)]
 		let offset = self.prefix.position() as usize;
 		self.prefix.get_ref().len() - offset
 	}
 
-	/// Rewinds the reader, so that subsequent reads will produce the captured
-	/// bytes before reading more from the source.
+	/// Rewinds the reader, so that subsequent reads produce captured bytes before reading more
+	/// from the source.
 	fn rewind(&mut self) {
 		self.prefix.set_position(0);
 	}
 
-	/// Captures all of the source's remaining input without modifying the
-	/// reader's position.
+	/// Captures all of the source's remaining input without modifying the reader's position.
 	fn capture_to_end(&mut self) -> io::Result<()> {
 		if !self.source_eof {
 			self.source.read_to_end(self.prefix.get_mut())?;
@@ -310,12 +275,11 @@ where
 		Ok(())
 	}
 
-	/// Attempts to read enough data from the source for the capture buffer to
-	/// contain at least `size` bytes, without modifying the reader's position.
+	/// Attempts to read enough data from the source for the capture buffer to contain at least
+	/// `size` bytes, without modifying the reader's position.
 	///
-	/// The actual number of captured bytes may be less than `size` if the
-	/// source reaches EOF before producing `size` bytes, or more than `size` if
-	/// more of the source is already captured.
+	/// The actual number of captured bytes may be less than `size` if the source reaches EOF, or
+	/// more than `size` if more of the source is already captured.
 	fn capture_up_to_size(&mut self, size: usize) -> io::Result<()> {
 		let needed = size.saturating_sub(self.prefix.get_ref().len());
 		if needed == 0 {
@@ -335,8 +299,7 @@ where
 		self.source_eof
 	}
 
-	/// Consumes the reader, returning any captured prefix as well as the
-	/// source.
+	/// Returns any captured prefix along with the source reader.
 	fn into_inner(self) -> (Cursor<Vec<u8>>, R) {
 		(self.prefix, self.source)
 	}
@@ -347,34 +310,29 @@ where
 	R: Read,
 {
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-		// First, copy as much data as we can from the unread portion of the
-		// cursor into the buffer.
+		// First, copy as much data as we can from the unread portion of the cursor into the
+		// buffer.
 		let prefix_size = std::cmp::min(buf.len(), self.captured_unread_size());
 		self.prefix.read_exact(&mut buf[..prefix_size])?;
 		if self.captured_unread_size() > 0 || prefix_size == buf.len() {
 			return Ok(prefix_size);
 		}
 
-		// Second, fill the rest of the buffer with data from the source, and
-		// capture it for ourselves as well.
+		// Second, fill the rest of the buffer with data from the source, and capture it for
+		// ourselves too.
 		//
-		// The `read` documentation recommends against us reading from `buf`,
-		// but does not prevent it, and does require callers of `read` to assume
-		// we might do this. As morally questionable as it is, this approach
-		// lets our consumer drive the number and size of reads against the
-		// source, making our presence more transparent to both sides. As the
-		// smallest consolation, it's worth noting that we only read bytes we
-		// know were freshly written, and do not rely on the original contents
-		// of `buf` in any way (unless, of course, the source is broken and lies
-		// about how many bytes it read).
+		// The `read` docs recommend against us reading from `buf`, but also require callers to
+		// assume we might do this. Letting our consumer drive the frequency and size of source
+		// reads makes our presence more transparent to both sides. We try to be good citizens by
+		// only reading the parts of `buf` the source tells us were freshly written.
 		let buf = &mut buf[prefix_size..];
 		let source_size = self.source.read(buf)?;
 		self.prefix.write_all(&buf[..source_size])?;
 
-		// Finally, mark whether the source is at EOF (keeping in mind that it
-		// can, in theory, return more data after an earlier EOF). We know `buf`
-		// can't be empty as we return early when `prefix_size == buf.len()`, so
-		// a 0 byte read can only indicate EOF.
+		// Finally, mark whether the source is at EOF (keeping in mind that it can technically
+		// return more data after an EOF). We know `buf` can't be empty since we return early when
+		// `prefix_size == buf.len()`, so a
+		// 0 byte read must mean EOF.
 		self.source_eof = source_size == 0;
 
 		Ok(prefix_size + source_size)
@@ -403,9 +361,8 @@ mod tests {
 		assert_eq!(std::str::from_utf8(&buf), Ok(&DATA[..HALF]));
 		buf.clear();
 
-		// `Ref`s are designed to be forgettable without breaking behavior. Part
-		// of the intent of this test is to ensure that no future `Drop` impl
-		// breaks this expectation.
+		// `Ref`s are designed to be forgettable without breaking behavior. The intent of this test
+		// is to ensure that no future `Drop` impl breaks this expectation.
 		#[allow(clippy::forget_non_drop)]
 		std::mem::forget(input_ref);
 
@@ -416,8 +373,8 @@ mod tests {
 		assert_eq!(std::str::from_utf8(&buf), Ok(&DATA[..HALF]));
 		buf.clear();
 
-		// If we only consume part of a borrowed reader, we need to reset the
-		// reader before giving ownership away.
+		// If we only consume part of a borrowed reader, we need to reset the reader before giving
+		// ownership away.
 		let mut r = match handle.into() {
 			Input::Slice(_) => unreachable!(),
 			Input::Reader(r) => r,
@@ -435,8 +392,8 @@ mod tests {
 			Ref::Reader(r) => io::copy(&mut r.take(HALF as u64), &mut io::sink()).unwrap(),
 		};
 
-		// If we only consume part of a borrowed reader, turning the input into
-		// a slice should still produce the full input.
+		// If we only consume part of a borrowed reader, turning the input into a slice should
+		// still produce the full input.
 		let buf: Cow<'_, [u8]> = handle.try_into().unwrap();
 		assert_eq!(std::str::from_utf8(&buf), Ok(DATA));
 	}

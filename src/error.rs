@@ -25,8 +25,7 @@ impl Display for Error {
 
 /// Box any error into an [`Error`].
 ///
-/// **This impl is not stable.** External code must not rely on the ability to
-/// construct an [`Error`] from any particular value.
+/// **This impl is unstable**, and external code must not rely on it.
 #[doc(hidden)]
 impl<T> From<T> for Error
 where

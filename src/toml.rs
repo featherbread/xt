@@ -14,14 +14,12 @@ pub(crate) fn input_matches(mut input: Ref) -> io::Result<bool> {
 	let input_buf = match input {
 		Ref::Slice(b) => b,
 		Ref::Reader(_) => {
-			// Our TOML parser requires that we fully buffer all input into a
-			// &str before parsing. However, if we have an unbounded input
-			// stream, we don't just want to endlessly fill up some poor buffer
-			// until we finally crash from an allocation failure.
+			// Our TOML parser requires that we buffer all input into a &str before parsing.
+			// However, if we have an unbounded input stream, we don't want to endlessly
+			// fill some poor buffer until we crash from an allocation failure.
 			//
-			// As an arbitrary cutoff, let's say that if you're streaming a TOML
-			// document >= 2 MiB in size into xt, it might be time to stop and
-			// think about some things.
+			// As an arbitrary cutoff, let's say that if you're streaming a TOML document >= 2 MiB
+			// in size into xt, it might be time to stop and think about some things.
 			const SIZE_CUTOFF: usize = 2 * 1024_usize.pow(2);
 			let prefix = input.prefix(SIZE_CUTOFF)?;
 			if prefix.len() >= SIZE_CUTOFF {
@@ -60,11 +58,10 @@ impl<W: Write> Output<W> {
 	}
 
 	fn ensure_one_use(&mut self) -> crate::Result<()> {
-		// Since TOML has no concept of multiple documents in a single stream,
-		// and we can't know the number of input documents in advance, we just
-		// fail if someone tries to use us more than once. We try to run this
-		// check before we even deserialize any values, so we don't waste time
-		// on things that will get thrown out.
+		// Since TOML has no concept of multiple documents in a single stream, and we can't know
+		// the number of input documents in advance, we fail if someone tries to use us more than
+		// once. We try to run this check before we even deserialize any values, so we don't waste
+		// time on things that will get thrown out.
 		if self.used {
 			return Err(TomlOutputError::MultiDocument.into());
 		}
@@ -73,18 +70,15 @@ impl<W: Write> Output<W> {
 	}
 
 	fn output_value(&mut self, value: &::toml::Value) -> crate::Result<()> {
-		// TOML requires that the root of the document be a table, which we
-		// can't guarantee for arbitrary input. While the toml crate allows
-		// deserializing to a toml::Table to avoid accepting non-table root
-		// values, the error message for such values (as of this writing) can be
-		// a bit noisier than the one we've historically provided ourselves, so
-		// we instead deserialize into the more general toml::Value and run the
-		// check manually.
+		// TOML requires that the root of the document be a table, which we can't guarantee for
+		// arbitrary input. While the toml crate allows deserializing to a toml::Table to avoid
+		// accepting non-table root values, the error message for such values (as of this writing)
+		// can be noisier than the one we've historically provided ourselves, so we instead
+		// deserialize into the more general toml::Value and run the check manually.
 		//
-		// TOML also requires that non-table values appear before any tables at
-		// a given level of nesting, which the toml crate knows how to handle.
-		// We enable the crate's "preserve_order" feature to keep as much of the
-		// original input ordering as we can.
+		// TOML also requires that non-table values appear before any tables at a given level of
+		// nesting, which the toml crate knows how to handle. We enable its "preserve_order"
+		// feature to keep as much of the original input ordering as we can.
 		if let toml::Value::Table(table) = value {
 			let output = ::toml::to_string_pretty(table)?;
 			self.w.write_all(output.as_bytes())?;
