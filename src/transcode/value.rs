@@ -1,5 +1,4 @@
-//! Non-streaming translation between Serde data formats using zero-copy
-//! deserialization.
+//! Non-streaming translation between Serde data formats using zero-copy deserialization.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -9,15 +8,13 @@ use serde::ser::{Serialize, SerializeMap, Serializer};
 
 /// A deserialized value referencing borrowed data.
 ///
-/// `Value` supports cases where an input format does not provide access to a
-/// [`Deserializer`] for direct transcoding, and instead requires deserializing
-/// into an in-memory value.
+/// `Value` supports cases where an input format doesn't provide access to a [`Deserializer`] for
+/// direct transcoding, and instead requires deserializing into an in-memory value.
 ///
-/// Unlike most "Serde value" types, `Value` is explicitly optimized for use in
-/// transcoding. It uses zero-copy deserialization for byte sequences and
-/// strings where possible, which limits the lifetime of the value and the types
-/// of inputs it can deserialize from. It represents maps as `Vec`s of key-value
-/// pairs, which preserves ordering but does not allow random access to entries.
+/// Unlike most "Serde value" types, `Value` is explicitly optimized for use in transcoding.
+/// It prefers zero-copy deserialization for byte sequences and strings, which limits the lifetime
+/// of the value and the types of inputs it can deserialize from. It represents maps as `Vec`s of
+/// key-value pairs, which preserves ordering but doesn't allow random access to entries.
 pub(crate) enum Value<'a> {
 	Unit,
 	Bool(bool),
@@ -76,8 +73,6 @@ impl Serialize for Value<'_> {
 }
 
 /// Implements [`de::Visitor`] methods that simply shove values into [`Value`]s.
-///
-/// This macro is non-hygienic, and not intended for use outside of this module.
 macro_rules! xt_transcode_impl_value_visitors {
 	($($name:ident($($arg:ident: $ty:ty)?) => $result:expr;)*) => {
 		$(fn $name<E: de::Error>(self, $($arg: $ty)?) -> Result<Self::Value, E> {
