@@ -1,6 +1,14 @@
 edition = "2024"
 style_edition = "2024"
 
-# Hard tabs provide significant accessibility benefits over Rust's preferred 4-space indentation.
+# xt deviates from The Rust Style Guide in two notable ways.
+
+# First, hard tabs can provide substantial accessibility benefits over a strict space count.
 # See e.g. https://redd.it/c8drjo, https://github.com/prettier/prettier/issues/7475#issuecomment-668544890.
 hard_tabs = true
+
+# Second, it's easier and more readable to wrap all comments at a maximum of 100 columns, rather
+# than the style guide's complicated "80 characters up to the maximum width of 100, whichever is
+# smaller" rule. The rustfmt tracking issue for the unstable "comment_width" option shows broad
+# agreement with this. Since this is unstable in rustfmt, I'm documenting the style preference
+# without any explicit setting change.
