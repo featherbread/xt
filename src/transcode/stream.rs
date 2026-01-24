@@ -194,7 +194,7 @@ impl<P, E> Exchange<P, E> {
 	fn take_parent(&self) -> P {
 		self.parent
 			.take()
-			.expect("parent already taken from exchange")
+			.expect("Exchange should have its parent taken exactly once")
 	}
 
 	/// Stores an error for extraction by a parent, along with its source.
