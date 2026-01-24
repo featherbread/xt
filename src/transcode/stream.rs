@@ -227,13 +227,13 @@ impl<S: Serializer> Visitor<S> {
 	/// basic scalar types (booleans, numbers, etc.), where the only meaningful difference between
 	/// methods is which [`Serializer`] method they need to call. Having this in a function (rather
 	/// than inlined into a macro body) makes it easier for rust-analyzer to inspect.
-	fn forward_scalar<F, E>(&mut self, use_serializer: F) -> Result<S::Ok, E>
+	fn forward_scalar<F, E>(&mut self, serialize_with: F) -> Result<S::Ok, E>
 	where
 		F: FnOnce(S) -> Result<S::Ok, S::Error>,
 		E: de::Error,
 	{
 		let ser = self.0.take_parent();
-		use_serializer(ser).map_err(|ser_err| {
+		serialize_with(ser).map_err(|ser_err| {
 			self.0.capture_error(ErrorSource::Ser, ser_err);
 			de::Error::custom(TRANSLATION_FAILED)
 		})
@@ -355,46 +355,15 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 
 /// A serializable "value" that actually serializes the next value produced by a [`Deserializer`].
 ///
-/// This is required to transcode the individual elements of collections like sequences and maps,
-/// as the serializer traits responsible for these types can only accept values implementing
-/// [`Serialize`].
-///
-/// Unlike most serializable types, a `Forwarder` can only be serialized once, and panics if
-/// serialized more than once.
+/// This is required to transcode the elements of collections like sequences and maps, as the
+/// serializer traits for collections can only accept values implementing [`Serialize`].
+/// Unlike most serializable types, a `Forwarder` panics if serialized more than once.
 struct Forwarder<'de, D: Deserializer<'de>>(State<D, D::Error>);
-
-impl<'de, D: Deserializer<'de>> Forwarder<'de, D> {
-	fn new(de: D) -> Forwarder<'de, D> {
-		Forwarder(State::new(de))
-	}
-
-	/// Provides the error capturing and mapping boilerplate for a single element of a collection,
-	/// which is associated with a particular Serde trait and collection-specific methods (e.g. to
-	/// distinguish map keys and values).
-	fn serialize_with_seed<S, SErr, F>(
-		self,
-		seed_state: &mut State<S, SErr>,
-		use_serializer: F,
-	) -> Result<(), D::Error>
-	where
-		F: FnOnce(S, &Self) -> Result<(), SErr>,
-	{
-		// &self has interior mutability, so serialization may capture an error and source into
-		// the state at self.0.
-		let ser = seed_state.take_parent();
-		use_serializer(ser, &self).map_err(|ser_err| {
-			seed_state.capture_error(self.0.error_source(), ser_err);
-			self.0
-				.into_error()
-				.unwrap_or_else(|| de::Error::custom(TRANSLATION_FAILED))
-		})
-	}
-}
 
 impl<'de, D: Deserializer<'de>> Serialize for Forwarder<'de, D> {
 	fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
-		let mut visitor = Visitor::new(ser);
 		let de = self.0.take_parent();
+		let mut visitor = Visitor::new(ser);
 		de.deserialize_any(&mut visitor).map_err(|de_err| {
 			self.0.capture_error(visitor.0.error_source(), de_err);
 			visitor
@@ -403,6 +372,28 @@ impl<'de, D: Deserializer<'de>> Serialize for Forwarder<'de, D> {
 				.unwrap_or_else(|| ser::Error::custom(TRANSLATION_FAILED))
 		})
 	}
+}
+
+/// Forwards the next value from a deserializer to the serializer stored in a [`State`],
+/// capturing any serializer error into the state.
+fn forward<'de, D, S, SErr, F>(
+	de: D,
+	ser_state: &mut State<S, SErr>,
+	serialize: F,
+) -> Result<(), D::Error>
+where
+	D: Deserializer<'de>,
+	F: FnOnce(S, &Forwarder<'de, D>) -> Result<(), SErr>,
+{
+	let ser = ser_state.take_parent();
+	let forwarder = Forwarder(State::new(de));
+	serialize(ser, &forwarder).map_err(|ser_err| {
+		ser_state.capture_error(forwarder.0.error_source(), ser_err);
+		forwarder
+			.0
+			.into_error()
+			.unwrap_or_else(|| de::Error::custom(TRANSLATION_FAILED))
+	})
 }
 
 /// Receives the next value of a sequence (from [`de::SeqAccess`]) and forwards it to a sequence
@@ -419,8 +410,7 @@ impl<'de, S: SerializeSeq> DeserializeSeed<'de> for &mut SeqSeed<'_, S> {
 	type Value = ();
 
 	fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<(), D::Error> {
-		Forwarder::new(de)
-			.serialize_with_seed(&mut self.0, |ser, element| ser.serialize_element(element))
+		forward(de, &mut self.0, |ser, elt| ser.serialize_element(elt))
 	}
 }
 
@@ -438,7 +428,7 @@ impl<'de, S: SerializeMap> DeserializeSeed<'de> for &mut KeySeed<'_, S> {
 	type Value = ();
 
 	fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<(), D::Error> {
-		Forwarder::new(de).serialize_with_seed(&mut self.0, |ser, key| ser.serialize_key(key))
+		forward(de, &mut self.0, |ser, key| ser.serialize_key(key))
 	}
 }
 
@@ -456,6 +446,6 @@ impl<'de, S: SerializeMap> DeserializeSeed<'de> for &mut ValueSeed<'_, S> {
 	type Value = ();
 
 	fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<(), D::Error> {
-		Forwarder::new(de).serialize_with_seed(&mut self.0, |ser, value| ser.serialize_value(value))
+		forward(de, &mut self.0, |ser, val| ser.serialize_value(val))
 	}
 }
