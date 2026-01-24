@@ -349,29 +349,36 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 	}
 }
 
-/// A serializable "value" that actually serializes the next value produced by a [`Deserializer`].
+/// Deserializable "values" that actually forward to a serializer.
 ///
-/// This is required to transcode the elements of collections like sequences and maps, as the
-/// serializer traits for collections can only accept values implementing [`Serialize`].
-/// Unlike most serializable types, a `Forwarder` panics if serialized more than once.
-struct Forwarder<'de, D: Deserializer<'de>>(State<D, D::Error>);
+/// To handle the elements of collections like sequences and maps, we need to hand the deserializer
+/// a `Deserialize` or [`DeserializeSeed`] impl for each element. In return, it hands the impl a
+/// [`Deserializer`] that produces the collection element.
+///
+/// Since our goal is to forward that element to a serializer, our impl is a [`DeserializeSeed`]
+/// holding the serializer type for the kind of collection we're handling (sequence or map),
+/// and calling the appropriate method on that type.
+macro_rules! impl_seed_types {
+	( $( struct $name:ident ($trait:ident) => $x:expr; )* ) => {
+		$(struct $name<'ser, S: $trait>(State<&'ser mut S, S::Error>);
 
-impl<'de, D: Deserializer<'de>> Serialize for Forwarder<'de, D> {
-	fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
-		let de = self.0.take_parent();
-		let mut visitor = Visitor(State::new(ser));
-		de.deserialize_any(&mut visitor).map_err(|de_err| {
-			self.0.capture_error(visitor.0.error_source(), de_err);
-			visitor
-				.0
-				.into_error()
-				.unwrap_or_else(|| ser::Error::custom(TRANSLATION_FAILED))
-		})
-	}
+		impl<'de, 'ser, S: $trait> DeserializeSeed<'de> for &mut $name<'ser, S> {
+			type Value = ();
+
+			fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<(), D::Error> {
+				forward(de, &mut self.0, $x)
+			}
+		})*
+	};
 }
 
-/// Forwards the next value from a deserializer to the serializer stored in a [`State`],
-/// capturing any serializer error into the state.
+impl_seed_types! {
+	struct SeqSeed(SerializeSeq)   => |ser, elt| ser.serialize_element(elt);
+	struct KeySeed(SerializeMap)   => |ser, key| ser.serialize_key(key);
+	struct ValueSeed(SerializeMap) => |ser, val| ser.serialize_value(val);
+}
+
+/// Forwards from a deserializer to the serializer held by a [seed](impl_seed_types).
 fn forward<'de, D, S, SErr, F>(
 	de: D,
 	ser_state: &mut State<S, SErr>,
@@ -392,24 +399,27 @@ where
 	})
 }
 
-/// Deserializable "values" that actually send the value produced by a [`Deserializer`] directly
-/// into a [`Serializer`].
-macro_rules! impl_seed_types {
-	( $( $name:ident ($trait:ident) => $x:expr; )* ) => {
-		$(struct $name<'ser, S: $trait>(State<&'ser mut S, S::Error>);
+/// A serializable "value" that actually serializes the next value from a [`Deserializer`].
+///
+/// The serializer held by a [seed](impl_seed_types) must be handed a [`Serialize`] impl for each
+/// element. In return, the serializer hands the impl a [`Serializer`] that it can drive based on
+/// the data it contains.
+///
+/// Since our goal is to take that value directly from a deserializer, our impl constructs a new
+/// [`Visitor`] and begins a recursive round of the dance started by [`transcode`]. Unlike a normal
+/// serializable value, a `Forwarder` panics if serialized more than once.
+struct Forwarder<'de, D: Deserializer<'de>>(State<D, D::Error>);
 
-		impl<'de, 'ser, S: $trait> DeserializeSeed<'de> for &mut $name<'ser, S> {
-			type Value = ();
-
-			fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<(), D::Error> {
-				forward(de, &mut self.0, $x)
-			}
-		})*
-	};
-}
-
-impl_seed_types! {
-	SeqSeed(SerializeSeq)   => |ser, elt| ser.serialize_element(elt);
-	KeySeed(SerializeMap)   => |ser, key| ser.serialize_key(key);
-	ValueSeed(SerializeMap) => |ser, val| ser.serialize_value(val);
+impl<'de, D: Deserializer<'de>> Serialize for Forwarder<'de, D> {
+	fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+		let de = self.0.take_parent();
+		let mut visitor = Visitor(State::new(ser));
+		de.deserialize_any(&mut visitor).map_err(|de_err| {
+			self.0.capture_error(visitor.0.error_source(), de_err);
+			visitor
+				.0
+				.into_error()
+				.unwrap_or_else(|| ser::Error::custom(TRANSLATION_FAILED))
+		})
+	}
 }
