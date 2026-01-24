@@ -1,13 +1,23 @@
 //! Streaming translation between Serde data formats.
 //!
 //! xt's streaming transcoder is inspired by the [`serde_transcode`] crate advertised in the Serde
-//! documentation. However, its implementation has diverged significantly to enable preservation of
-//! original (de)serializer error values, in contrast to `serde_transcode` stringifying errors to
-//! meet Serde API requirements.
+//! documentation, but has diverged significantly to support preserving original (de)serializer
+//! error values, in contrast to `serde_transcode`'s approach of stringifying errors to meet Serde
+//! API requirements.
 //!
-//! This capability comes at the cost of significant implementation complexity. If it's not an
-//! absolute requirement for your use case, you should probably stick with the simpler,
-//! more mature, and more popular `serde_transcode`.
+//! This was intended to facilitate a clean exit on [`BrokenPipe`](std::io::ErrorKind::BrokenPipe)
+//! errors. However, experience shows that transcoding isn't the only hurdle for clean broken pipe
+//! handling: the error types for some data formats don't expose I/O errors in their source chains,
+//! making broken pipes difficult to discover from a coalesced `dyn Error` at the top of the call
+//! stack. xt ultimately solved this problem with [`pipecheck`], moving the handling of broken
+//! pipes directly into the `Write` path.
+//!
+//! The remaining benefit of preservation is to simplify error messages. Where `serde_transcode`
+//! errors in the middle of collections tend to communicate the full "stack" of lines and columns
+//! leading to a bad value, xt's errors point to the bad location alone.
+//!
+//! That said, `serde_transcode` is a simpler and more widely adopted implementation that supports
+//! more of Serde than xt needs to. It should be your first choice.
 //!
 //! [`serde_transcode`]: https://github.com/sfackler/serde-transcode
 
