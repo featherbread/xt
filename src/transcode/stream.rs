@@ -52,7 +52,7 @@ where
 	S: Serializer,
 	D: Deserializer<'de>,
 {
-	let mut visitor = Visitor(State::new(ser));
+	let mut visitor = Visitor(Exchange::new(ser));
 	de.deserialize_any(&mut visitor)
 		.map_err(|de_err| match visitor.0.error_source() {
 			ErrorSource::Ser => Error::Ser(visitor.0.into_error().unwrap(), de_err),
@@ -117,30 +117,29 @@ enum ErrorSource {
 	Ser,
 }
 
-/// The internal state of a single transcoding step, holding data that can't cross normal
-/// Serde API boundaries.
+/// The state of a transcode step that can't cross normal Serde API boundaries.
 ///
-/// The transcoding process relies on special implementations of key Serde traits like
-/// [`Serialize`] and [`de::Visitor`]. To preserve the original values of (de)serializer errors
-/// across Serde API boundaries that can't represent them directly, and to account for the fact
-/// that many Serde trait methods consume `self`, the transcoder's implementations of Serde trait
-/// methods follow a common pattern:
+/// Transcoding relies on special implementations of key Serde traits like [`Serialize`] and
+/// [`de::Visitor`]. To preserve the original values of (de)serializer errors across Serde API
+/// boundaries that can't represent them directly, and to account for the fact that many Serde
+/// trait methods consume `self`, the transcoder's implementations of Serde trait methods follow a
+/// common pattern:
 ///
 /// 1. Take ownership of some "parent" value: either the serializer to which the next deserialized
 ///    value should be forwarded, or the deserializer that will produce the next value.
 ///
-/// 2. Call some method of the parent, possibly with a value that was passed to us as an argument,
-///    consuming the parent and producing a [`Result`] of generic value and error types.
+/// 2. Call some method of the parent with a value passed as an argument, consuming the parent and
+///    producing a [`Result`] of generic value and error types.
 ///
-/// 3. If the parent returned an error that we can't return directly, capture that original error
-///    value (and its source) and instead return whatever error type our method signature requires,
-///    either by extracting it from a child `State` or constructing it with a well-known message
-///    string (which is the only capability that Serde's error traits require; they can't be
-///    constructed with arbitrary payloads).
+/// 3. If the parent returned an error we can't return directly, capture that original error (and
+///    its source) and instead return whatever error type our method signature requires, either by
+///    extracting it from an `Exchange` or constructing it with a well-known message string (which
+///    is the only capability that Serde's error traits require; they can't be constructed with
+///    arbitrary payloads).
 ///
-/// This type is designed to facilitate this pattern, generally as part of a newtype struct that
-/// implements a specific Serde trait.
-struct State<P, E> {
+/// This type facilitates the pattern of exchanging parents and errors, generally as part of a
+/// newtype struct that implements a specific Serde trait.
+struct Exchange<P, E> {
 	// Only Forwarder actually needs interior mutability, due to `serialize` taking `&self`.
 	// However, two obvious ways of moving the interior mutability into Forwarder end up hurting
 	// transcoding performance:
@@ -164,10 +163,10 @@ struct State<P, E> {
 	source: Cell<ErrorSource>,
 }
 
-impl<P, E> State<P, E> {
-	/// Creates a new state holding the provided parent value.
-	fn new(parent: P) -> State<P, E> {
-		State {
+impl<P, E> Exchange<P, E> {
+	/// Creates a new exchange holding `parent`.
+	fn new(parent: P) -> Exchange<P, E> {
+		Exchange {
 			parent: Cell::new(Some(parent)),
 			error: Cell::new(None),
 			// Errors are assumed to come from the deserializer by default. Since the transcoder
@@ -176,16 +175,15 @@ impl<P, E> State<P, E> {
 		}
 	}
 
-	/// Returns the contained parent value, as long as it was not previously
-	/// taken.
+	/// Returns the contained parent.
 	///
 	/// # Panics
 	///
-	/// Panics if the parent value has already been taken from this state.
+	/// If the parent has already been taken.
 	fn take_parent(&self) -> P {
 		self.parent
-			.replace(None)
-			.expect("parent already taken from this state")
+			.take()
+			.expect("parent already taken from exchange")
 	}
 
 	/// Captures an error for later extraction, and records the provided source (serializer or
@@ -195,13 +193,13 @@ impl<P, E> State<P, E> {
 		self.error.set(Some(error));
 	}
 
-	/// Consumes and captures both the error value and error source from another state.
-	fn capture_child_error<C>(&self, child: State<C, E>) {
+	/// Consumes and captures both the error value and error source from another exchange.
+	fn capture_child_error<C>(&self, child: Exchange<C, E>) {
 		self.source.set(child.error_source());
 		self.error.set(child.into_error());
 	}
 
-	/// Returns the source (serializer or deserializer) of any error associated with this state.
+	/// Returns the source (serializer or deserializer) of the error (if any) in the exchange.
 	fn error_source(&self) -> ErrorSource {
 		self.source.get()
 	}
@@ -216,7 +214,7 @@ impl<P, E> State<P, E> {
 ///
 /// The deserializer's [`Deserializer::deserialize_any`] drives the transcoding process by calling
 /// the [`de::Visitor`] method corresponding to the type of value it sees in the input.
-struct Visitor<S: Serializer>(State<S, S::Error>);
+struct Visitor<S: Serializer>(Exchange<S, S::Error>);
 
 impl<S: Serializer> Visitor<S> {
 	/// Provides the error capturing and mapping boilerplate for all visitor methods that handle
@@ -300,7 +298,7 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 		})?;
 
 		loop {
-			let mut seed = SeqSeed(State::new(&mut seq));
+			let mut seed = SeqSeed(Exchange::new(&mut seq));
 			match de.next_element_seed(&mut seed) {
 				Ok(None) => break,
 				Ok(Some(())) => {}
@@ -325,7 +323,7 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 		})?;
 
 		loop {
-			let mut key_seed = KeySeed(State::new(&mut map));
+			let mut key_seed = KeySeed(Exchange::new(&mut map));
 			match de.next_key_seed(&mut key_seed) {
 				Ok(None) => break,
 				Ok(Some(())) => {}
@@ -335,7 +333,7 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 				}
 			}
 
-			let mut value_seed = ValueSeed(State::new(&mut map));
+			let mut value_seed = ValueSeed(Exchange::new(&mut map));
 			if let Err(de_err) = de.next_value_seed(&mut value_seed) {
 				self.0.capture_child_error(value_seed.0);
 				return Err(de_err);
@@ -360,7 +358,7 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 /// and calling the appropriate method on that type.
 macro_rules! impl_seed_types {
 	( $( struct $name:ident ($trait:ident) => $x:expr; )* ) => {
-		$(struct $name<'ser, S: $trait>(State<&'ser mut S, S::Error>);
+		$(struct $name<'ser, S: $trait>(Exchange<&'ser mut S, S::Error>);
 
 		impl<'de, 'ser, S: $trait> DeserializeSeed<'de> for &mut $name<'ser, S> {
 			type Value = ();
@@ -381,17 +379,17 @@ impl_seed_types! {
 /// Forwards from a deserializer to the serializer held by a [seed](impl_seed_types).
 fn forward<'de, D, S, SErr, F>(
 	de: D,
-	ser_state: &mut State<S, SErr>,
+	ser_xchg: &mut Exchange<S, SErr>,
 	serialize: F,
 ) -> Result<(), D::Error>
 where
 	D: Deserializer<'de>,
 	F: FnOnce(S, &Forwarder<'de, D>) -> Result<(), SErr>,
 {
-	let ser = ser_state.take_parent();
-	let forwarder = Forwarder(State::new(de));
+	let ser = ser_xchg.take_parent();
+	let forwarder = Forwarder(Exchange::new(de));
 	serialize(ser, &forwarder).map_err(|ser_err| {
-		ser_state.capture_error(forwarder.0.error_source(), ser_err);
+		ser_xchg.capture_error(forwarder.0.error_source(), ser_err);
 		forwarder
 			.0
 			.into_error()
@@ -408,12 +406,12 @@ where
 /// Since our goal is to take that value directly from a deserializer, our impl constructs a new
 /// [`Visitor`] and begins a recursive round of the dance started by [`transcode`]. Unlike a normal
 /// serializable value, a `Forwarder` panics if serialized more than once.
-struct Forwarder<'de, D: Deserializer<'de>>(State<D, D::Error>);
+struct Forwarder<'de, D: Deserializer<'de>>(Exchange<D, D::Error>);
 
 impl<'de, D: Deserializer<'de>> Serialize for Forwarder<'de, D> {
 	fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
 		let de = self.0.take_parent();
-		let mut visitor = Visitor(State::new(ser));
+		let mut visitor = Visitor(Exchange::new(ser));
 		de.deserialize_any(&mut visitor).map_err(|de_err| {
 			self.0.capture_error(visitor.0.error_source(), de_err);
 			visitor
