@@ -143,11 +143,21 @@ enum ErrorSource {
 /// This type is designed to facilitate this pattern, generally as part of a newtype struct that
 /// implements a specific Serde trait.
 struct State<P, E> {
-	// Only Forwarder actually needs interior mutability for its state (due to `serialize` taking
-	// `&self`). However, putting Forwarder's full state in a `Cell` has a 15% - 25% impact on
-	// translation performance for formats that aren't expensive to encode or decode (like
-	// MessagePack). I can only guess at the possible optimizations and/or CPU microarchitectural
-	// effects that could be at play, since I haven't found a good way to understand this in depth.
+	// Only Forwarder actually needs interior mutability, due to `serialize` taking `&self`.
+	// However, two obvious ways of moving the interior mutability into Forwarder end up hurting
+	// transcoding performance:
+	//
+	// 1. When removing Cell from these fields but otherwise leaving the layout as-is, performance
+	//    slows by as much as 15% - 25%, especially on formats like MessagePack that aren't
+	//    expensive to encode or decode on their own.
+	//
+	// 2. When turning this into an enum (with empty, parent, and error states), the impact is
+	//    closer to 5%. Not as bad, but still measurable and consistent.
+	//
+	// These numbers are based on Forwarder using Cell for interior mutability, but RefCell doesn't
+	// improve them either. I can only guess at the optimizations or CPU microarchitectural effects
+	// that might be at play. My suspicion is that this version somehow minimizes data copying, but
+	// I don't know how to confirm or deny that hypothesis.
 	//
 	// Serde traits are implemented on `&mut` references where possible to help mark where mutation
 	// is happening, even though `&` would technically work.
