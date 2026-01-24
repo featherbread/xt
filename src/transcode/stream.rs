@@ -52,7 +52,7 @@ where
 	S: Serializer,
 	D: Deserializer<'de>,
 {
-	let mut visitor = Visitor::new(ser);
+	let mut visitor = Visitor(State::new(ser));
 	de.deserialize_any(&mut visitor)
 		.map_err(|de_err| match visitor.0.error_source() {
 			ErrorSource::Ser => Error::Ser(visitor.0.into_error().unwrap(), de_err),
@@ -219,10 +219,6 @@ impl<P, E> State<P, E> {
 struct Visitor<S: Serializer>(State<S, S::Error>);
 
 impl<S: Serializer> Visitor<S> {
-	fn new(ser: S) -> Visitor<S> {
-		Visitor(State::new(ser))
-	}
-
 	/// Provides the error capturing and mapping boilerplate for all visitor methods that handle
 	/// basic scalar types (booleans, numbers, etc.), where the only meaningful difference between
 	/// methods is which [`Serializer`] method they need to call. Having this in a function (rather
@@ -304,7 +300,7 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 		})?;
 
 		loop {
-			let mut seed = SeqSeed::new(&mut seq);
+			let mut seed = SeqSeed(State::new(&mut seq));
 			match de.next_element_seed(&mut seed) {
 				Ok(None) => break,
 				Ok(Some(())) => {}
@@ -329,7 +325,7 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 		})?;
 
 		loop {
-			let mut key_seed = KeySeed::new(&mut map);
+			let mut key_seed = KeySeed(State::new(&mut map));
 			match de.next_key_seed(&mut key_seed) {
 				Ok(None) => break,
 				Ok(Some(())) => {}
@@ -339,7 +335,7 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 				}
 			}
 
-			let mut value_seed = ValueSeed::new(&mut map);
+			let mut value_seed = ValueSeed(State::new(&mut map));
 			if let Err(de_err) = de.next_value_seed(&mut value_seed) {
 				self.0.capture_child_error(value_seed.0);
 				return Err(de_err);
@@ -363,7 +359,7 @@ struct Forwarder<'de, D: Deserializer<'de>>(State<D, D::Error>);
 impl<'de, D: Deserializer<'de>> Serialize for Forwarder<'de, D> {
 	fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
 		let de = self.0.take_parent();
-		let mut visitor = Visitor::new(ser);
+		let mut visitor = Visitor(State::new(ser));
 		de.deserialize_any(&mut visitor).map_err(|de_err| {
 			self.0.capture_error(visitor.0.error_source(), de_err);
 			visitor
@@ -396,56 +392,24 @@ where
 	})
 }
 
-/// Receives the next value of a sequence (from [`de::SeqAccess`]) and forwards it to a sequence
-/// serializer (through [`ser::SerializeSeq`]).
-struct SeqSeed<'ser, S: SerializeSeq>(State<&'ser mut S, S::Error>);
+/// Deserializable "values" that actually send the value produced by a [`Deserializer`] directly
+/// into a [`Serializer`].
+macro_rules! impl_seed_types {
+	( $( $name:ident ($trait:ident) => $x:expr; )* ) => {
+		$(struct $name<'ser, S: $trait>(State<&'ser mut S, S::Error>);
 
-impl<'ser, S: SerializeSeq> SeqSeed<'ser, S> {
-	fn new(ser: &'ser mut S) -> SeqSeed<'ser, S> {
-		SeqSeed(State::new(ser))
-	}
+		impl<'de, 'ser, S: $trait> DeserializeSeed<'de> for &mut $name<'ser, S> {
+			type Value = ();
+
+			fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<(), D::Error> {
+				forward(de, &mut self.0, $x)
+			}
+		})*
+	};
 }
 
-impl<'de, S: SerializeSeq> DeserializeSeed<'de> for &mut SeqSeed<'_, S> {
-	type Value = ();
-
-	fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<(), D::Error> {
-		forward(de, &mut self.0, |ser, elt| ser.serialize_element(elt))
-	}
-}
-
-/// Receives a map key (from [`de::MapAccess`]) and forwards it to a map serializer
-/// (through [`ser::SerializeMap`]).
-struct KeySeed<'ser, S: SerializeMap>(State<&'ser mut S, S::Error>);
-
-impl<'ser, S: SerializeMap> KeySeed<'ser, S> {
-	fn new(ser: &'ser mut S) -> KeySeed<'ser, S> {
-		KeySeed(State::new(ser))
-	}
-}
-
-impl<'de, S: SerializeMap> DeserializeSeed<'de> for &mut KeySeed<'_, S> {
-	type Value = ();
-
-	fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<(), D::Error> {
-		forward(de, &mut self.0, |ser, key| ser.serialize_key(key))
-	}
-}
-
-/// Receives a map value (from [`de::MapAccess`]) and forwards it to a map serializer
-/// (through [`ser::SerializeMap`]).
-struct ValueSeed<'ser, S: SerializeMap>(State<&'ser mut S, S::Error>);
-
-impl<'ser, S: SerializeMap> ValueSeed<'ser, S> {
-	fn new(ser: &'ser mut S) -> ValueSeed<'ser, S> {
-		ValueSeed(State::new(ser))
-	}
-}
-
-impl<'de, S: SerializeMap> DeserializeSeed<'de> for &mut ValueSeed<'_, S> {
-	type Value = ();
-
-	fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<(), D::Error> {
-		forward(de, &mut self.0, |ser, val| ser.serialize_value(val))
-	}
+impl_seed_types! {
+	SeqSeed(SerializeSeq)   => |ser, elt| ser.serialize_element(elt);
+	KeySeed(SerializeMap)   => |ser, key| ser.serialize_key(key);
+	ValueSeed(SerializeMap) => |ser, val| ser.serialize_value(val);
 }
