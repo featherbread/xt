@@ -376,11 +376,11 @@ fn forward<'de, D, S, SErr, F>(
 ) -> Result<(), D::Error>
 where
 	D: Deserializer<'de>,
-	F: FnOnce(S, &Forwarder<'de, D>) -> Result<(), SErr>,
+	F: FnOnce(S, &mut Forwarder<'de, D>) -> Result<(), SErr>,
 {
 	let ser = ser_exchange.take_parent();
-	let forwarder = Forwarder(Exchange::new(de));
-	serialize(ser, &forwarder).map_err(|ser_err| {
+	let mut forwarder = Forwarder(Exchange::new(de));
+	serialize(ser, &mut forwarder).map_err(|ser_err| {
 		let (source, de_err) = forwarder.0.into_error();
 		ser_exchange.stash_error(source, ser_err);
 		de_err.unwrap_or_else(|| de::Error::custom(TRANSLATION_FAILED))
