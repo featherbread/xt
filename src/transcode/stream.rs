@@ -53,13 +53,11 @@ where
 	D: Deserializer<'de>,
 {
 	let mut visitor = Visitor::new(ser);
-	match de.deserialize_any(&mut visitor) {
-		Ok(value) => Ok(value),
-		Err(de_err) => match visitor.0.error_source() {
-			ErrorSource::Ser => Err(Error::Ser(visitor.0.into_error().unwrap(), de_err)),
-			ErrorSource::De => Err(Error::De(de_err)),
-		},
-	}
+	de.deserialize_any(&mut visitor)
+		.map_err(|de_err| match visitor.0.error_source() {
+			ErrorSource::Ser => Error::Ser(visitor.0.into_error().unwrap(), de_err),
+			ErrorSource::De => Error::De(de_err),
+		})
 }
 
 /// Holds an error produced during transcoding.
@@ -235,13 +233,10 @@ impl<S: Serializer> Visitor<S> {
 		E: de::Error,
 	{
 		let ser = self.0.take_parent();
-		match use_serializer(ser) {
-			Ok(value) => Ok(value),
-			Err(ser_err) => {
-				self.0.capture_error(ErrorSource::Ser, ser_err);
-				Err(de::Error::custom(TRANSLATION_FAILED))
-			}
-		}
+		use_serializer(ser).map_err(|ser_err| {
+			self.0.capture_error(ErrorSource::Ser, ser_err);
+			de::Error::custom(TRANSLATION_FAILED)
+		})
 	}
 }
 
@@ -302,13 +297,11 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 	}
 
 	fn visit_seq<A: de::SeqAccess<'de>>(self, mut de: A) -> Result<Self::Value, A::Error> {
-		let mut seq = match self.0.take_parent().serialize_seq(de.size_hint()) {
-			Ok(seq) => seq,
-			Err(ser_err) => {
-				self.0.capture_error(ErrorSource::Ser, ser_err);
-				return Err(de::Error::custom(TRANSLATION_FAILED));
-			}
-		};
+		let parent = self.0.take_parent();
+		let mut seq = parent.serialize_seq(de.size_hint()).map_err(|ser_err| {
+			self.0.capture_error(ErrorSource::Ser, ser_err);
+			de::Error::custom(TRANSLATION_FAILED)
+		})?;
 
 		loop {
 			let mut seed = SeqSeed::new(&mut seq);
@@ -322,23 +315,18 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 			}
 		}
 
-		match seq.end() {
-			Ok(value) => Ok(value),
-			Err(ser_err) => {
-				self.0.capture_error(ErrorSource::Ser, ser_err);
-				Err(de::Error::custom(TRANSLATION_FAILED))
-			}
-		}
+		seq.end().map_err(|ser_err| {
+			self.0.capture_error(ErrorSource::Ser, ser_err);
+			de::Error::custom(TRANSLATION_FAILED)
+		})
 	}
 
 	fn visit_map<A: de::MapAccess<'de>>(self, mut de: A) -> Result<Self::Value, A::Error> {
-		let mut map = match self.0.take_parent().serialize_map(de.size_hint()) {
-			Ok(map) => map,
-			Err(ser_err) => {
-				self.0.capture_error(ErrorSource::Ser, ser_err);
-				return Err(de::Error::custom(TRANSLATION_FAILED));
-			}
-		};
+		let parent = self.0.take_parent();
+		let mut map = parent.serialize_map(de.size_hint()).map_err(|ser_err| {
+			self.0.capture_error(ErrorSource::Ser, ser_err);
+			de::Error::custom(TRANSLATION_FAILED)
+		})?;
 
 		loop {
 			let mut key_seed = KeySeed::new(&mut map);
@@ -358,13 +346,10 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 			}
 		}
 
-		match map.end() {
-			Ok(value) => Ok(value),
-			Err(ser_err) => {
-				self.0.capture_error(ErrorSource::Ser, ser_err);
-				Err(de::Error::custom(TRANSLATION_FAILED))
-			}
-		}
+		map.end().map_err(|ser_err| {
+			self.0.capture_error(ErrorSource::Ser, ser_err);
+			de::Error::custom(TRANSLATION_FAILED)
+		})
 	}
 }
 
@@ -394,19 +379,15 @@ impl<'de, D: Deserializer<'de>> Forwarder<'de, D> {
 	where
 		F: FnOnce(S, &Self) -> Result<(), SErr>,
 	{
-		let ser = seed_state.take_parent();
 		// &self has interior mutability, so serialization may capture an error and source into
 		// the state at self.0.
-		match use_serializer(ser, &self) {
-			Ok(()) => Ok(()),
-			Err(ser_err) => {
-				seed_state.capture_error(self.0.error_source(), ser_err);
-				match self.0.into_error() {
-					Some(de_err) => Err(de_err),
-					None => Err(de::Error::custom(TRANSLATION_FAILED)),
-				}
-			}
-		}
+		let ser = seed_state.take_parent();
+		use_serializer(ser, &self).map_err(|ser_err| {
+			seed_state.capture_error(self.0.error_source(), ser_err);
+			self.0
+				.into_error()
+				.unwrap_or_else(|| de::Error::custom(TRANSLATION_FAILED))
+		})
 	}
 }
 
@@ -414,16 +395,13 @@ impl<'de, D: Deserializer<'de>> Serialize for Forwarder<'de, D> {
 	fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
 		let mut visitor = Visitor::new(ser);
 		let de = self.0.take_parent();
-		match de.deserialize_any(&mut visitor) {
-			Ok(value) => Ok(value),
-			Err(de_err) => {
-				self.0.capture_error(visitor.0.error_source(), de_err);
-				match visitor.0.into_error() {
-					Some(ser_err) => Err(ser_err),
-					None => Err(ser::Error::custom(TRANSLATION_FAILED)),
-				}
-			}
-		}
+		de.deserialize_any(&mut visitor).map_err(|de_err| {
+			self.0.capture_error(visitor.0.error_source(), de_err);
+			visitor
+				.0
+				.into_error()
+				.unwrap_or_else(|| ser::Error::custom(TRANSLATION_FAILED))
+		})
 	}
 }
 
