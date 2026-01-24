@@ -72,9 +72,9 @@ impl Serialize for Value<'_> {
 	}
 }
 
-/// Implements [`de::Visitor`] methods that simply shove values into [`Value`]s.
-macro_rules! xt_transcode_impl_value_visitors {
-	($($name:ident($($arg:ident: $ty:ty)?) => $result:expr;)*) => {
+/// Implements the simplest [`de::Visitor`] methods that shove scalars into [`Value`]s.
+macro_rules! impl_value_scalar_visitors {
+	( $( $name:ident($($arg:ident: $ty:ty)?) => $result:expr; )* ) => {
 		$(fn $name<E: de::Error>(self, $($arg: $ty)?) -> Result<Self::Value, E> {
 			Ok($result)
 		})*
@@ -95,7 +95,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for Value<'a> {
 				f.write_str("any supported value")
 			}
 
-			xt_transcode_impl_value_visitors! {
+			impl_value_scalar_visitors! {
 				visit_unit() => Value::Unit;
 
 				visit_bool(v: bool) => Value::Bool(v);

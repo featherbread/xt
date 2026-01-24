@@ -245,11 +245,10 @@ impl<S: Serializer> Visitor<S> {
 	}
 }
 
-/// Implements [`de::Visitor`] methods that simply forward scalar values to the appropriate
-/// [`Serializer`] method.
-macro_rules! xt_transcode_impl_scalar_visitors {
-	($($name:ident($($arg:ident: $ty:ty)?) => $op:expr;)*) => {
-		$(fn $name<E: ::serde::de::Error>(self, $($arg: $ty)?) -> ::std::result::Result<Self::Value, E> {
+/// Implements the simplest [`de::Visitor`] methods that forward scalars to a [`Serializer`].
+macro_rules! impl_forward_scalar_visitors {
+	( $( $name:ident($($arg:ident: $ty:ty)?) => $op:expr; )* ) => {
+		$(fn $name<E: de::Error>(self, $($arg: $ty)?) -> Result<Self::Value, E> {
 			self.forward_scalar($op)
 		})*
 	};
@@ -277,7 +276,7 @@ impl<'de, S: Serializer> de::Visitor<'de> for &mut Visitor<S> {
 		f.write_str("any supported value")
 	}
 
-	xt_transcode_impl_scalar_visitors! {
+	impl_forward_scalar_visitors! {
 		visit_unit() => |ser| ser.serialize_unit();
 
 		visit_bool(v: bool) => |ser| ser.serialize_bool(v);
