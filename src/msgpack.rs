@@ -238,13 +238,12 @@ fn try_read_length<const N: usize, T, F>(input: &[u8], convert: F) -> Result<T, 
 where
 	F: FnOnce([u8; N]) -> T,
 {
-	Ok(convert(
-		input
-			.get(1..1 + N)
-			.ok_or(ReadSizeError::Truncated)?
-			.try_into()
-			.unwrap(),
-	))
+	let length_be_bytes = input
+		.get(1..)
+		.and_then(|s| s.first_chunk::<N>())
+		.ok_or(ReadSizeError::Truncated)?;
+
+	Ok(convert(*length_be_bytes))
 }
 
 /// The error type returned by [`next_value_size`].
