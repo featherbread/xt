@@ -26,3 +26,10 @@ path = "fuzz_targets/reader_detected_all_formats.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "slice_yaml"
+path = "fuzz_targets/slice_yaml.rs"
+test = false
+doc = false
+bench = false
