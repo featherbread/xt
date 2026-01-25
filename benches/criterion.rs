@@ -1,4 +1,5 @@
 use std::hint::black_box;
+use std::time::Duration;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -14,7 +15,7 @@ criterion_group! {
 
 criterion_group! {
 	name = medium;
-	config = Criterion::default();
+	config = Criterion::default().measurement_time(Duration::from_secs(20));
 	targets = medium_json, medium_yaml, medium_toml, medium_msgpack
 }
 
