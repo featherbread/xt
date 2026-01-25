@@ -73,13 +73,9 @@ xt_benchmark! {
 }
 
 fn load_small_data(format: Format) -> Vec<u8> {
-	// The Kubernetes Job expands to a few hundred bytes regardless of format.
-	load_test_data(include_bytes!("k8s-job.yaml"), format, 512)
-}
-
-fn load_test_data(input: &[u8], format: Format, capacity: usize) -> Vec<u8> {
-	let mut output = Vec::with_capacity(capacity);
+	let input: &[u8] = include_bytes!("k8s-job.yaml");
+	let mut output = Vec::with_capacity(512);
 	xt::translate_slice(input, Some(Format::Yaml), format, &mut output)
-		.expect("failed to translate test data");
+		.expect("k8s-job.yaml should be valid YAML");
 	output
 }
