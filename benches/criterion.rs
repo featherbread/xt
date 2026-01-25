@@ -15,7 +15,7 @@ criterion_group! {
 criterion_group! {
 	name = medium;
 	config = Criterion::default();
-	targets = medium_json
+	targets = medium_json, medium_yaml, medium_toml, medium_msgpack
 }
 
 macro_rules! xt_benchmark {
@@ -91,6 +91,27 @@ xt_benchmark! {
 	sources = buffer, reader;
 	loader = load_medium_data;
 	translation = Format::Json => Format::Msgpack;
+}
+
+xt_benchmark! {
+	name = medium_yaml;
+	sources = buffer, reader;
+	loader = load_medium_data;
+	translation = Format::Yaml => Format::Json;
+}
+
+xt_benchmark! {
+	name = medium_toml;
+	sources = buffer;
+	loader = load_medium_data;
+	translation = Format::Toml => Format::Json;
+}
+
+xt_benchmark! {
+	name = medium_msgpack;
+	sources = buffer, reader;
+	loader = load_medium_data;
+	translation = Format::Msgpack => Format::Json;
 }
 
 fn load_medium_data(format: Format) -> Vec<u8> {
