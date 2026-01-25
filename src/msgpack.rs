@@ -458,19 +458,19 @@ mod tests {
 		std::thread::Builder::new()
 			.stack_size(8 * 1024 * 1024)
 			.spawn(move || {
-				match_input_buffer(&input[..]).expect("failed to detect buffer");
+				match_input_buffer(&input[..]).expect("buffer should be valid MessagePack");
 				super::transcode(
 					input::Handle::from_slice(&input[..]),
 					super::Output::new(io::sink()),
 				)
-				.expect("failed to translate buffer");
+				.expect("buffer should be valid MessagePack");
 
-				match_input_reader(&input[..]).expect("failed to detect reader");
+				match_input_reader(&input[..]).expect("buffer should be valid MessagePack");
 				super::transcode(
 					input::Handle::from_reader(&input[..]),
 					super::Output::new(io::sink()),
 				)
-				.expect("failed to translate reader");
+				.expect("buffer should be valid MessagePack");
 			})
 			.unwrap()
 			.join()
