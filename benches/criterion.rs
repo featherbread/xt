@@ -118,6 +118,8 @@ xt_benchmark! {
 }
 
 fn load_medium_data(format: Format) -> Vec<u8> {
+	use rmp::Marker;
+
 	// These manifests were generated using a `helm template` command that should be reproducible
 	// given the correct version of the original chart.
 	let input: &[u8] = include_bytes!("k8s-kyverno.yaml");
@@ -125,19 +127,22 @@ fn load_medium_data(format: Format) -> Vec<u8> {
 	// For TOML compatibility, we need to take this stream of Kubernetes manifests and put them
 	// into a single object. Since MessagePack doesn't use characters or indentation for structure,
 	// it's (surprisingly) the easiest way I can think to do this.
-	//
-	// See https://github.com/msgpack/msgpack/blob/master/spec.md for a description of the bytes.
 	let mut packed = Vec::new();
 
-	packed.push(0x81); // Map of 1 element; key and value follow.
+	packed.push(Marker::FixMap(1).to_u8()); // Map of 1 element; key and value follow.
 
-	packed.push(0xa9); // String of 9 characters.
-	packed.extend(b"manifests");
+	// Key, string of 9 characters.
+	let key = b"manifests";
+	let len = u8::try_from(key.len()).unwrap();
+	packed.push(Marker::FixStr(len).to_u8());
+	packed.extend(key);
 
-	packed.push(0xdc); // Array; 16-bit size to follow.
-	packed.extend(79u16.to_be_bytes()); // `xt k8s-kyverno.yaml | jq -s length`
+	// Array of 79 elements (`xt k8s-kyverno.yaml | jq -s length`); elements follow.
+	let len: u16 = 79;
+	packed.push(Marker::Array16.to_u8());
+	packed.extend(len.to_be_bytes());
 
-	// The 79 elements of the array.
+	// The elements of the array.
 	xt::translate_slice(input, Some(Format::Yaml), Format::Msgpack, &mut packed)
 		.expect("k8s-kyverno.yaml should be valid YAML");
 
