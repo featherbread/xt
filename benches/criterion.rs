@@ -1,15 +1,22 @@
 use std::hint::black_box;
+use std::time::Duration;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 
 use xt::Format;
 
-criterion_main!(small);
+criterion_main!(small, medium);
 
 criterion_group! {
 	name = small;
 	config = Criterion::default();
 	targets = small_json, small_yaml, small_toml, small_msgpack
+}
+
+criterion_group! {
+	name = medium;
+	config = Criterion::default().measurement_time(Duration::from_secs(20));
+	targets = medium_json, medium_yaml, medium_toml, medium_msgpack
 }
 
 macro_rules! xt_benchmark {
@@ -73,13 +80,71 @@ xt_benchmark! {
 }
 
 fn load_small_data(format: Format) -> Vec<u8> {
-	// The Kubernetes Job expands to a few hundred bytes regardless of format.
-	load_test_data(include_bytes!("k8s-job.json"), format, 512)
+	let input: &[u8] = include_bytes!("k8s-job.yaml");
+
+	let mut output = Vec::with_capacity(512);
+	xt::translate_slice(input, Some(Format::Yaml), format, &mut output)
+		.expect("k8s-job.yaml should be valid YAML");
+
+	output
 }
 
-fn load_test_data(input: &[u8], format: Format, capacity: usize) -> Vec<u8> {
-	let mut output = Vec::with_capacity(capacity);
-	xt::translate_slice(input, Some(Format::Json), format, &mut output)
-		.expect("failed to translate test data");
+xt_benchmark! {
+	name = medium_json;
+	sources = buffer, reader;
+	loader = load_medium_data;
+	translation = Format::Json => Format::Msgpack;
+}
+
+xt_benchmark! {
+	name = medium_yaml;
+	sources = buffer, reader;
+	loader = load_medium_data;
+	translation = Format::Yaml => Format::Json;
+}
+
+xt_benchmark! {
+	name = medium_toml;
+	sources = buffer;
+	loader = load_medium_data;
+	translation = Format::Toml => Format::Json;
+}
+
+xt_benchmark! {
+	name = medium_msgpack;
+	sources = buffer, reader;
+	loader = load_medium_data;
+	translation = Format::Msgpack => Format::Json;
+}
+
+fn load_medium_data(format: Format) -> Vec<u8> {
+	// These manifests were generated using a `helm template` command that should be reproducible
+	// given the correct version of the original chart.
+	let input: &[u8] = include_bytes!("k8s-kyverno.yaml");
+
+	// For TOML compatibility, we need to take this stream of Kubernetes manifests and put them
+	// into a single object. Since MessagePack doesn't use characters or indentation for structure,
+	// it's (surprisingly) the easiest way I can think to do this.
+	//
+	// See https://github.com/msgpack/msgpack/blob/master/spec.md for a description of the bytes.
+	let mut packed = Vec::new();
+
+	packed.push(0x81); // Map of 1 element; key and value follow.
+
+	packed.push(0xa9); // String of 9 characters.
+	packed.extend(b"manifests");
+
+	packed.push(0xdc); // Array; 16-bit size to follow.
+	packed.extend(79u16.to_be_bytes()); // `xt k8s-kyverno.yaml | jq -s length`
+
+	// The 79 elements of the array.
+	xt::translate_slice(input, Some(Format::Yaml), Format::Msgpack, &mut packed)
+		.expect("k8s-kyverno.yaml should be valid YAML");
+
+	// Now, translate that {"manifests": [...]} object to the final output format.
+	let mut output = Vec::new();
+	xt::translate_slice(&packed, Some(Format::Msgpack), format, &mut output)
+		.expect("packed object should be valid");
+
 	output
 }
