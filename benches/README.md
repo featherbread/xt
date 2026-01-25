@@ -50,7 +50,7 @@ benchmark run, including charts and comparisons with any previous run.
 
 ## Test Inputs
 
-The small input, `k8s-job.json`, is a simple Kubernetes `Job` that runs the
+The small input, `k8s-job.yaml`, is a simple Kubernetes `Job` that runs the
 Docker `hello-world` image. Translation time is usually a few microseconds for
 even the slowest input formats, so each benchmark runs in just a few seconds.
 This provides relatively fast feedback as you work.
