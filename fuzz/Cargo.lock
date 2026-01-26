@@ -317,7 +317,6 @@ name = "xt"
 version = "0.20.1-dev"
 dependencies = [
  "lexopt",
- "libc",
  "memmap2",
  "pipecheck",
  "rmp",

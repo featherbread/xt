@@ -27,9 +27,6 @@ unsafe-libyaml = "0.2.11"
 version = "0.9.11"
 features = ["preserve_order"]
 
-[target.'cfg(unix)'.dependencies]
-libc = "0.2.169"
-
 [dev-dependencies]
 hex-literal = "1.1.0"
 similar-asserts = "1.7.0"

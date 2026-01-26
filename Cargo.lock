@@ -851,7 +851,6 @@ dependencies = [
  "criterion",
  "hex-literal",
  "lexopt",
- "libc",
  "memmap2",
  "pipecheck",
  "rmp",
