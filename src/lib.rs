@@ -11,6 +11,8 @@
 	// Enforce some additional strictness on unsafe code.
 	unsafe_op_in_unsafe_fn,
 	clippy::undocumented_unsafe_blocks,
+	// Avoid plain `unwrap` with no further details.
+	clippy::unwrap_used,
 	// Deny a number of `as` casts in favor of safer alternatives.
 	clippy::as_underscore,
 	clippy::ptr_as_ptr,
