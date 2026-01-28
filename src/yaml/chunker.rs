@@ -14,6 +14,8 @@ use std::mem;
 
 mod parser;
 
+use crate::input::cast_read_offset_usize;
+
 use self::parser::{
 	Parser, YAML_DOCUMENT_END_EVENT, YAML_DOCUMENT_START_EVENT, YAML_MAPPING_START_EVENT,
 	YAML_SCALAR_EVENT, YAML_SEQUENCE_START_EVENT, YAML_STREAM_END_EVENT,
@@ -156,7 +158,7 @@ where
 	/// Trims from the start of the capture buffer so the next chunk will begin at the specified
 	/// reader offset.
 	fn trim_to_offset(&mut self, offset: u64) {
-		let trim_len = crate::cast_read_offset_usize(offset - self.captured_start_offset);
+		let trim_len = cast_read_offset_usize(offset - self.captured_start_offset);
 		self.captured_start_offset = offset;
 		self.captured.drain(..trim_len);
 	}
@@ -164,7 +166,7 @@ where
 	/// Takes the chunk from the start of the capture buffer up to the specified reader offset,
 	/// leaving bytes beyond the offset in the capture buffer.
 	fn take_to_offset(&mut self, offset: u64) -> Vec<u8> {
-		let take_len = crate::cast_read_offset_usize(offset - self.captured_start_offset);
+		let take_len = cast_read_offset_usize(offset - self.captured_start_offset);
 		let tail = self.captured.split_off(take_len);
 		self.captured_start_offset = offset;
 		mem::replace(&mut self.captured, tail)
