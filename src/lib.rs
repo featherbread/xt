@@ -301,3 +301,22 @@ impl Format {
 		Ok(None)
 	}
 }
+
+/// Cast the offset of a memory-based [`io::Read`] to a [`usize`].
+///
+/// While `Read` APIs present offsets as `u64`s, any offset into a reader over an in-memory slice
+/// must naturally be representable in a width that covers every possible memory address.
+///
+/// # Panics
+///
+/// When debug assertions are enabled and `n` doesn't fit in a usize.
+/// This is a tradeoff between the relative efficiency and potential dangers of plain `as` casts.
+#[inline(always)]
+#[allow(clippy::cast_possible_truncation)]
+fn cast_read_offset_usize(n: u64) -> usize {
+	if cfg!(debug_assertions) {
+		usize::try_from(n).expect("reader offset should fit in a usize")
+	} else {
+		n as usize
+	}
+}

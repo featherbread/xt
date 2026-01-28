@@ -252,11 +252,7 @@ where
 	/// Returns the number of bytes remaining to read from the captured prefix before consuming
 	/// more from the source.
 	fn captured_unread_size(&self) -> usize {
-		// The cursor position is relative to an in-memory slice.
-		// This shouldn't truncate unless we manually give the cursor
-		// a ridiculous position.
-		#[allow(clippy::cast_possible_truncation)]
-		let offset = self.prefix.position() as usize;
+		let offset = crate::cast_read_offset_usize(self.prefix.position());
 		self.prefix.get_ref().len() - offset
 	}
 

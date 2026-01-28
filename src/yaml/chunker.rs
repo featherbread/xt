@@ -156,7 +156,7 @@ where
 	/// Trims from the start of the capture buffer so the next chunk will begin at the specified
 	/// reader offset.
 	fn trim_to_offset(&mut self, offset: u64) {
-		let trim_len = cast_offset_usize(offset - self.captured_start_offset);
+		let trim_len = crate::cast_read_offset_usize(offset - self.captured_start_offset);
 		self.captured_start_offset = offset;
 		self.captured.drain(..trim_len);
 	}
@@ -164,20 +164,10 @@ where
 	/// Takes the chunk from the start of the capture buffer up to the specified reader offset,
 	/// leaving bytes beyond the offset in the capture buffer.
 	fn take_to_offset(&mut self, offset: u64) -> Vec<u8> {
-		let take_len = cast_offset_usize(offset - self.captured_start_offset);
+		let take_len = crate::cast_read_offset_usize(offset - self.captured_start_offset);
 		let tail = self.captured.split_off(take_len);
 		self.captured_start_offset = offset;
 		mem::replace(&mut self.captured, tail)
-	}
-}
-
-#[inline(always)]
-#[allow(clippy::cast_possible_truncation)]
-fn cast_offset_usize(n: u64) -> usize {
-	if cfg!(debug_assertions) {
-		usize::try_from(n).expect("YAML chunker offset should fit in a usize")
-	} else {
-		n as usize
 	}
 }
 
