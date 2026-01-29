@@ -64,7 +64,7 @@ where
 	let mut visitor = Visitor(Exchange::new(ser));
 	de.deserialize_any(&mut visitor).map_err(|de_err| {
 		let (source, ser_err) = visitor.0.into_error();
-		if let ErrorSource::Ser = source {
+		if matches!(source, ErrorSource::Ser) {
 			debug_assert!(
 				ser_err.is_some(),
 				"ErrorSource::Ser should include a serializer error"

@@ -13,6 +13,7 @@
 	clippy::checked_conversions,
 	clippy::unnecessary_cast,
 	// More general style-type things.
+	clippy::equatable_if_let,
 	clippy::from_over_into,
 	clippy::needless_raw_string_hashes,
 	clippy::semicolon_if_nothing_returned,
@@ -75,7 +76,7 @@ fn main() {
 			Ok(input) => input,
 			Err(err) => xt_bail_path!(path, "{err}"),
 		};
-		if let Input::Stdin = input {
+		if matches!(input, Input::Stdin) {
 			// TODO: Is this check worth it? You can pass /dev/stdin more than once, though the
 			// behavior might be weird.
 			if stdin_used {
