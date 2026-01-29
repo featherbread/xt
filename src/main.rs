@@ -44,15 +44,12 @@ use xt::Format;
 mod bail;
 
 fn main() {
-	let args = match Cli::parse_args() {
-		Ok(args) => args,
-		Err(err) => {
-			let mut stderr = io::stderr().lock();
-			let _ = writeln!(stderr, "xt error: {err}");
-			write_short_help(stderr);
-			process::exit(2);
-		}
-	};
+	let Ok(args) = Cli::parse_args().map_err(|err| {
+		let mut stderr = io::stderr().lock();
+		let _ = writeln!(stderr, "xt error: {err}");
+		write_short_help(stderr);
+		process::exit(2);
+	});
 
 	let stdout = io::stdout();
 	if stdout.is_terminal() && format_is_unsafe_for_terminal(args.to) {
@@ -71,11 +68,10 @@ fn main() {
 	} else {
 		InputPaths::many(args.input_pathnames.into_iter().map(Into::into))
 	};
+
 	for path in input_paths {
-		let input = match path.open() {
-			Ok(input) => input,
-			Err(err) => xt_bail_path!(path, "{err}"),
-		};
+		let Ok(input) = path.open().map_err(|err| xt_bail_path!(path, "{err}"));
+
 		if matches!(input, Input::Stdin) {
 			// TODO: Is this check worth it? You can pass /dev/stdin more than once, though the
 			// behavior might be weird.
