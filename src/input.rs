@@ -345,7 +345,6 @@ where
 ///
 /// When debug assertions are enabled and `n` doesn't fit in a usize.
 /// This is a tradeoff between the relative efficiency and potential dangers of plain `as` casts.
-#[inline(always)]
 #[allow(clippy::cast_possible_truncation)]
 pub(crate) fn cast_read_offset_usize(n: u64) -> usize {
 	if cfg!(debug_assertions) {
