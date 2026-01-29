@@ -69,9 +69,9 @@ where
 		// SAFETY: Again, we assume libyaml is implemented correctly. We know the parser is
 		// initialized because we didn't panic above.
 		unsafe {
-			yaml_parser_set_encoding(&mut *parser, YAML_UTF8_ENCODING);
+			yaml_parser_set_encoding(&raw mut *parser, YAML_UTF8_ENCODING);
 			yaml_parser_set_input(
-				&mut *parser,
+				&raw mut *parser,
 				Self::read_handler,
 				read_state.cast::<c_void>(),
 			);
@@ -190,7 +190,7 @@ where
 		// deallocate that way. We logically destroy the parser before the read state, so it should
 		// have no chance to access freed read state memory.
 		unsafe {
-			yaml_parser_delete(&mut *self.parser);
+			yaml_parser_delete(&raw mut *self.parser);
 			drop(Box::from_raw(self.read_state));
 		}
 	}
@@ -231,7 +231,7 @@ impl Drop for Event {
 		// SAFETY: Event::parse_next returns an error if libyaml fails to initialize the event,
 		// so we know it's logically valid here.
 		unsafe {
-			yaml_event_delete(&mut self.0);
+			yaml_event_delete(&raw mut self.0);
 		};
 	}
 }
