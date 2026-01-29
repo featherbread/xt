@@ -35,7 +35,9 @@ macro_rules! xt_benchmark {
 
 			$(group.bench_function(stringify!($source), |b| {
 				b.iter(|| {
-					xt_benchmark!(@translate_fn $source)(
+					#[allow(unused_imports)]
+					use xt::{translate_slice as buffer, translate_reader as reader};
+					$source(
 						&*input,
 						black_box(Some($from)),
 						black_box($to),
@@ -47,8 +49,6 @@ macro_rules! xt_benchmark {
 			group.finish();
 		}
 	};
-	(@translate_fn buffer) => { xt::translate_slice };
-	(@translate_fn reader) => { xt::translate_reader };
 }
 
 xt_benchmark! {
