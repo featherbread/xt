@@ -41,7 +41,7 @@ use std::process;
 use xt::Format;
 
 #[macro_use]
-mod bail;
+mod die;
 
 fn main() {
 	let Ok(args) = Cli::parse_args().map_err(|err| {
@@ -53,9 +53,9 @@ fn main() {
 
 	let stdout = io::stdout();
 	if stdout.is_terminal() && format_is_unsafe_for_terminal(args.to) {
-		xt_bail!(
+		die!(
 			"refusing to output {format} to a terminal",
-			format = args.to,
+			format = args.to
 		);
 	}
 
@@ -70,13 +70,13 @@ fn main() {
 	};
 
 	for path in input_paths {
-		let Ok(input) = path.open().map_err(|err| xt_bail_path!(path, "{err}"));
+		let Ok(input) = path.open().map_err(|err| die_in!(path, "{err}"));
 
 		if matches!(input, Input::Stdin) {
 			// TODO: Is this check worth it? You can pass /dev/stdin more than once, though the
 			// behavior might be weird.
 			if stdin_used {
-				xt_bail!("cannot read from standard input more than once");
+				die!("cannot read from standard input more than once");
 			}
 			stdin_used = true;
 		}
@@ -88,10 +88,10 @@ fn main() {
 			Input::Mmap(map) => translator.translate_slice(&map, from),
 		};
 		if let Err(err) = result {
-			xt_bail_path!(path, "{err}");
+			die_in!(path, "{err}");
 		}
 		if let Err(err) = translator.flush() {
-			xt_bail!("{err}");
+			die!("{err}");
 		}
 	}
 }
