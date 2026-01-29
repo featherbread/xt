@@ -31,6 +31,7 @@
 //! original reader with no wrapping beyond boxing as a trait object.
 
 use std::borrow::Cow;
+use std::cmp;
 use std::io::{self, Cursor, Read, Write};
 
 /// A reusable container for xt's input.
@@ -308,7 +309,7 @@ where
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
 		// First, copy as much data as we can from the unread portion of the cursor into the
 		// buffer.
-		let prefix_size = std::cmp::min(buf.len(), self.captured_unread_size());
+		let prefix_size = cmp::min(buf.len(), self.captured_unread_size());
 		self.prefix.read_exact(&mut buf[..prefix_size])?;
 		if self.captured_unread_size() > 0 || prefix_size == buf.len() {
 			return Ok(prefix_size);

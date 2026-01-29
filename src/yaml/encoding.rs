@@ -22,10 +22,11 @@
 //! is represented by values to reduce the number of type instantiations. The implementation fully
 //! relies on or is inspired by the Rust standard library.
 
-use std::cmp::min;
+use std::cmp;
 use std::error::Error;
-use std::fmt::{Debug, Display, LowerHex};
+use std::fmt::{self, Debug, Display, LowerHex};
 use std::io::{self, BufRead, Read, Write};
+use std::mem;
 
 /// The possible text encodings of a valid YAML 1.2 stream.
 pub(super) enum Encoding {
@@ -217,7 +218,7 @@ where
 			let mut tmp = [0u8; MAX_UTF8_ENCODED_LEN];
 			let char_len = ch.encode_utf8(&mut tmp).len();
 
-			let emit_len = min(char_len, buf.len());
+			let emit_len = cmp::min(char_len, buf.len());
 			buf[..emit_len].copy_from_slice(&tmp[..emit_len]);
 			buf = &mut buf[emit_len..];
 			written += emit_len;
@@ -412,7 +413,7 @@ impl<T> EncodingError<T>
 where
 	T: CodeUnit,
 {
-	const BIT_SIZE: usize = std::mem::size_of::<T>() * 8;
+	const BIT_SIZE: usize = mem::size_of::<T>() * 8;
 
 	fn new(unit: T, pos: u64) -> Self {
 		Self { unit, pos }
@@ -434,7 +435,7 @@ impl<T> Display for EncodingError<T>
 where
 	T: CodeUnit,
 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
 			f,
 			"invalid or unexpected UTF-{size} code unit 0x{unit:x} at byte {byte}",
@@ -503,7 +504,7 @@ impl<const SIZE: usize> ArrayBuffer<SIZE> {
 impl<const SIZE: usize> Read for ArrayBuffer<SIZE> {
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
 		let unread = self.unread();
-		let n = min(unread.len(), buf.len());
+		let n = cmp::min(unread.len(), buf.len());
 		buf[..n].copy_from_slice(&unread[..n]);
 		self.pos += n;
 		Ok(n)
@@ -528,7 +529,7 @@ impl<const SIZE: usize> BufRead for ArrayBuffer<SIZE> {
 impl<const SIZE: usize> Write for ArrayBuffer<SIZE> {
 	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
 		let unwritten = &mut self.buf[self.len..SIZE];
-		let n = min(unwritten.len(), buf.len());
+		let n = cmp::min(unwritten.len(), buf.len());
 		unwritten[..n].copy_from_slice(&buf[..n]);
 		self.len += n;
 		Ok(n)

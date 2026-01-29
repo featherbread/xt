@@ -262,7 +262,7 @@ enum InputPath {
 
 enum Input {
 	Stdin,
-	File(std::fs::File),
+	File(File),
 	Mmap(memmap2::Mmap),
 }
 

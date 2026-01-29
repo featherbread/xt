@@ -8,7 +8,7 @@
 
 use std::error::Error;
 use std::ffi::{CStr, c_char, c_void};
-use std::fmt::Display;
+use std::fmt::{self, Display};
 use std::io::{self, Read};
 use std::mem::MaybeUninit;
 use std::ptr;
@@ -284,7 +284,7 @@ impl ParserError {
 impl Error for ParserError {}
 
 impl Display for ParserError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match &self.problem {
 			None => f.write_str("unknown libyaml error"),
 			Some(problem) => match &self.context {
@@ -318,7 +318,7 @@ impl LocatedError {
 }
 
 impl Display for LocatedError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		if self.line == 1 && self.column == 1 {
 			write!(
 				f,
