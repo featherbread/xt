@@ -365,10 +365,7 @@ where
 		self.pos += next.len() as u64;
 
 		let unit = self.endianness.decode_u32(next);
-		Some(match char::from_u32(unit) {
-			Some(ch) => Ok(ch),
-			None => Err(EncodingError::new(unit, pos).into()),
-		})
+		Some(char::from_u32(unit).ok_or_else(|| EncodingError::new(unit, pos).into()))
 	}
 }
 
