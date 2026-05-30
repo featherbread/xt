@@ -29,7 +29,7 @@ features = ["preserve_order"]
 
 [dev-dependencies]
 hex-literal = "1.1.0"
-similar-asserts = "1.7.0"
+similar-asserts = "2.0.0"
 
 [dev-dependencies.criterion]
 version = "0.7.0"
