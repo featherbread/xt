@@ -1,3 +1,27 @@
+## Unreleased
+
+### Fixed
+
+- **Various TOML bugs.** This version of xt upgrades to the latest version of
+  the third-party `toml` library, which fixes a variety of parser errors.
+  Some of these errors allowed previous versions of xt to silently accept
+  invalid TOML inputs, which are now rejected as errors in accordance with the
+  TOML spec.
+
+### Changed
+
+- This version of xt includes substantial copyediting of internal code comments
+  and panic messages, plus code style improvements permitted by the recent bump
+  to Rust 1.85 and my continued experience learning Rust. These changes are not
+  expected to affect functionality, performance, or security.
+- The xt source repository now includes a "medium" benchmarking input: a
+  ~4.4 MiB YAML file generated as specified in `benches/README.md`. This
+  partially fills a gap created by deleting the Zstandard-compressed "large"
+  input from the mainline in response to the XZ Utils backdoor, and seeks to
+  strike a better balance between disk utilization and auditability. Note that
+  xt's benchmark inputs have long been excluded from crates.io releases to
+  reduce storage and download sizes.
+
 ## v0.20.0 (2026-01-10)
 
 ### Added
