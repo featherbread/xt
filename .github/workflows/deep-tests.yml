@@ -45,8 +45,8 @@ jobs:
       matrix:
         runner:
         - ubuntu-24.04
-        - macos-14
-        - windows-2022
+        - macos-15
+        - windows-2025
         toolchain:
         - stable
         - ${{ needs.read-msrv.outputs.msrv }}
