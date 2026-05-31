@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     - name: Install cargo-about
       run: |
         version="$CARGO_ABOUT_VERSION"
@@ -25,7 +25,7 @@ jobs:
     - name: Generate LICENSES.html
       run: make doc/LICENSES.html
     - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: doc
         path: doc
@@ -45,7 +45,7 @@ jobs:
       RUSTFLAGS: -C linker=rust-lld
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     - name: Download Toolchain
       run: |
         rustup set profile minimal
@@ -59,7 +59,7 @@ jobs:
         make "$bin"
         tar -czvf target.tar.gz "$bin"
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: target-${{ matrix.target }}
         path: target.tar.gz
@@ -75,9 +75,9 @@ jobs:
       attestations: write
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     - name: Download Artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
     - name: Assemble Archives
       run: |
         for targetdir in ./target-*; do
@@ -86,13 +86,13 @@ jobs:
         done
         (cd dist && sha256sum xt-*.tar.gz | tee SHA256SUMS)
     - name: Upload Release Artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: release
         path: |
           dist/xt-*.tar.gz
           dist/SHA256SUMS
     - name: Create GitHub Attestation
-      uses: actions/attest-build-provenance@v2
+      uses: actions/attest-build-provenance@v4
       with:
         subject-checksums: dist/SHA256SUMS
